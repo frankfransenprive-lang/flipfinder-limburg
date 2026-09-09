@@ -34,3 +34,5 @@ Zet API-keys alleen op de server in environment variables. Nooit in `public/inde
 
 ## Belangrijk
 De meegeleverde woningen zijn demo-data. De live koppellaag is voorbereid maar nog niet verbonden met een externe betaalde/geautoriseerde feed.
+Flask==3.0.3
+gunicorn==22.0.0
