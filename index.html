@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0f172a">
+<link rel="manifest" href="manifest.webmanifest">
+<title>FlipFinder Limburg</title>
+<style>
+:root{--bg:#f6f7fb;--card:#fff;--ink:#0f172a;--muted:#64748b;--line:#e2e8f0;--green:#047857;--red:#b91c1c;--blue:#2563eb}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif}
+header{position:sticky;top:0;z-index:20;background:rgba(15,23,42,.97);color:#fff;padding:calc(14px + env(safe-area-inset-top)) 16px 13px}
+header h1{margin:0;font-size:21px}header p{margin:4px 0 0;font-size:12px;color:#cbd5e1}
+main{max-width:900px;margin:auto;padding:14px 14px calc(96px + env(safe-area-inset-bottom))}
+.panel,.card{background:#fff;border:1px solid var(--line);border-radius:18px;box-shadow:0 3px 14px rgba(15,23,42,.05)}
+.panel{padding:14px;margin-bottom:14px}.card{overflow:hidden;margin-bottom:14px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+label{display:block;font-size:11px;color:var(--muted);margin-bottom:5px}input,select{width:100%;padding:11px 12px;border:1px solid #cbd5e1;border-radius:12px;background:#fff;font-size:16px}
+button{border:0;border-radius:12px;padding:11px 13px;font-weight:750;font-size:14px}.primary{background:#0f172a;color:#fff}.secondary{background:#eff6ff;color:#1d4ed8}.ghost{background:#f1f5f9;color:#0f172a}
+.hero{height:145px;background:linear-gradient(135deg,#dbeafe,#e2e8f0);display:flex;align-items:center;justify-content:center;color:#475569;font-weight:800}
+.body{padding:14px}.top{display:flex;justify-content:space-between;gap:10px}.title{font-size:18px;font-weight:800}.sub{font-size:12px;color:var(--muted);margin-top:3px}.price{font-size:20px;font-weight:900;margin-top:8px}
+.score{min-width:66px;text-align:center;padding:9px;border-radius:14px;background:#ecfdf5;color:var(--green);font-weight:900}.score small{display:block;font-size:9px}
+.stat{background:#f8fafc;border-radius:12px;padding:10px}.stat b{display:block;font-size:14px}.stat span{font-size:10px;color:var(--muted)}
+.profit{font-size:21px;font-weight:900;color:var(--green)}.loss{color:var(--red)}.actions{display:flex;gap:8px;margin-top:12px}.actions button{flex:1}
+.row{display:flex;justify-content:space-between;gap:14px;padding:7px 0;border-bottom:1px solid #eef2f7;font-size:13px}.row:last-child{border-bottom:0}
+.section-title{font-size:16px;font-weight:850;margin:0 0 10px}.notice{font-size:12px;color:var(--muted);line-height:1.45}
+.status{padding:10px;border-radius:12px;background:#f8fafc;font-size:12px;line-height:1.45}.ok{color:var(--green);font-weight:800}.warn{color:#b45309;font-weight:800}
+nav{position:fixed;left:0;right:0;bottom:0;background:#fff;border-top:1px solid var(--line);padding:7px 8px calc(7px + env(safe-area-inset-bottom));z-index:30}
+nav .inner{max-width:900px;margin:auto;display:grid;grid-template-columns:repeat(4,1fr);gap:4px}nav button{background:#fff;color:#64748b;padding:7px 3px;font-size:10px}nav button.active{background:#f1f5f9;color:#0f172a}
+.hidden{display:none}@media(max-width:560px){.grid,.grid3{grid-template-columns:1fr 1fr}.grid3 .stat:last-child{grid-column:1/-1}}
+</style>
+</head>
+<body>
+<header><h1>FlipFinder Limburg</h1><p>Live-ready deal scanner voor iPhone</p></header>
+<main>
+<section id="dealsView">
+ <div class="panel">
+  <div class="grid">
+   <div><label>Plaats</label><select id="city"><option value="">Heel Limburg</option></select></div>
+   <div><label>Max. vraagprijs</label><input id="maxPrice" type="number" value="400000"></div>
+   <div><label>Min. winst</label><input id="minProfit" type="number" value="30000"></div>
+   <div><label>Min. ROI %</label><input id="minRoi" type="number" value="12"></div>
+  </div>
+  <button class="primary" style="width:100%;margin-top:10px" onclick="loadDeals()">Ververs deals</button>
+ </div>
+ <div id="cards"></div>
+</section>
+
+<section id="alertsView" class="hidden">
+ <div class="panel">
+  <h3 class="section-title">Meldingsregels</h3>
+  <div class="grid">
+   <div><label>Min. nettowinst</label><input id="aProfit" type="number" value="30000"></div>
+   <div><label>Min. ROI %</label><input id="aRoi" type="number" value="12"></div>
+   <div><label>Max. vraagprijs</label><input id="aMax" type="number" value="400000"></div>
+   <div><label>Plaats</label><select id="aCity"><option value="">Heel Limburg</option></select></div>
+  </div>
+  <button class="primary" style="width:100%;margin-top:10px" onclick="saveAlert()">Meldingsregel opslaan</button>
+  <p class="notice">In productie controleert de backend nieuwe woningen en stuurt hij alleen een melding als een woning aan deze regels voldoet.</p>
+ </div>
+</section>
+
+<section id="statusView" class="hidden">
+ <div class="panel">
+  <h3 class="section-title">Koppelingen</h3>
+  <div id="statusBox" class="status">Status laden…</div>
+ </div>
+ <div class="panel">
+  <h3 class="section-title">Nieuwe woningen importeren</h3>
+  <p class="notice">Voor demo-doeleinden importeert deze knop voorbeelddata. Later vervang je de adapter door een officiële woningfeed/API.</p>
+  <button class="secondary" style="width:100%" onclick="runImport()">Demo-import uitvoeren</button>
+ </div>
+</section>
+
+<section id="settingsView" class="hidden">
+ <div class="panel">
+  <h3 class="section-title">Rekenmodel</h3>
+  <div class="grid">
+   <div><label>Overdrachtsbelasting %</label><input id="sTransfer" type="number" value="8" step="0.1"></div>
+   <div><label>Notaris/advies</label><input id="sNotary" type="number" value="3000"></div>
+   <div><label>Rente % p.j.</label><input id="sInterest" type="number" value="8" step="0.1"></div>
+   <div><label>Looptijd maanden</label><input id="sMonths" type="number" value="6"></div>
+   <div><label>Verkoopkosten %</label><input id="sSellPct" type="number" value="2" step="0.1"></div>
+   <div><label>Onvoorzien % renovatie</label><input id="sContPct" type="number" value="10"></div>
+  </div>
+  <button class="primary" style="width:100%;margin-top:10px" onclick="saveSettings()">Opslaan</button>
+ </div>
+</section>
+</main>
+
+<nav><div class="inner">
+<button class="active" data-view="dealsView" onclick="showView(this)">🏠<br>Deals</button>
+<button data-view="alertsView" onclick="showView(this)">🔔<br>Meldingen</button>
+<button data-view="statusView" onclick="showView(this)">🔌<br>Koppelingen</button>
+<button data-view="settingsView" onclick="showView(this)">⚙️<br>Instellingen</button>
+</div></nav>
+
+<script>
+const API='/api';
+const euro=n=>new Intl.NumberFormat('nl-NL',{style:'currency',currency:'EUR',maximumFractionDigits:0}).format(n);
+function getSettings(){return JSON.parse(localStorage.getItem('ff3-settings')||'{"transfer":8,"notary":3000,"interest":8,"months":6,"sellPct":2,"contPct":10}')}
+function calc(p){
+ const s=getSettings();
+ const transfer=p.price*s.transfer/100,interest=p.price*s.interest/100*(s.months/12),selling=p.resale_estimate*s.sellPct/100,cont=p.renovation_estimate*s.contPct/100;
+ const total=p.price+transfer+s.notary+interest+p.renovation_estimate+selling+cont;
+ const profit=p.resale_estimate-total,roi=profit/total*100;
+ let score=50+(profit-30000)/2500+(roi-12)*1.7+(p.price/p.size_m2<2200?7:0);score=Math.max(1,Math.min(99,Math.round(score)));
+ return {...p,total,profit,roi,score};
+}
+function card(p){
+ const c=calc(p);return `<article class="card"><div class="hero">Woningfoto • ${p.city}</div><div class="body">
+ <div class="top"><div><div class="title">${p.street}, ${p.city}</div><div class="sub">${p.property_type} • ${p.size_m2} m² • bouwjaar ${p.build_year||'-'} • label ${p.energy_label||'-'}</div></div><div class="score">${c.score}<small>DEAL SCORE</small></div></div>
+ <div class="price">${euro(p.price)}</div>
+ <div class="grid3" style="margin-top:11px"><div class="stat"><b>${euro(p.renovation_estimate)}</b><span>renovatie</span></div><div class="stat"><b>${euro(p.resale_estimate)}</b><span>verkoopwaarde</span></div><div class="stat"><b>${c.roi.toFixed(1)}%</b><span>ROI</span></div></div>
+ <div class="sub" style="margin-top:10px">Geschatte nettowinst</div><div class="profit ${c.profit<0?'loss':''}">${euro(c.profit)}</div>
+ <div class="actions"><button class="secondary" onclick="window.open('${p.source_url||'#'}','_blank')">Bron</button><button class="ghost" onclick="alert('Totale investering: ${euro(c.total)}')">Calculatie</button></div>
+ </div></article>`;
+}
+async function loadDeals(){
+ let data;try{let r=await fetch(API+'/properties');data=await r.json()}catch(e){cards.innerHTML='<div class="panel">Backend niet bereikbaar. Start eerst de server.</div>';return}
+ const cities=[...new Set(data.map(x=>x.city))].sort();for(const id of ['city','aCity']){let el=document.getElementById(id),v=el.value;el.innerHTML='<option value="">Heel Limburg</option>'+cities.map(c=>`<option>${c}</option>`).join('');el.value=v}
+ const cf=city.value,max=+maxPrice.value||1e9,mp=+minProfit.value||-1e9,mr=+minRoi.value||-999;
+ data=data.map(calc).filter(x=>(!cf||x.city===cf)&&x.price<=max&&x.profit>=mp&&x.roi>=mr).sort((a,b)=>b.score-a.score);
+ cards.innerHTML=data.length?data.map(card).join(''):'<div class="panel">Geen deals binnen deze filters.</div>';
+}
+function saveSettings(){localStorage.setItem('ff3-settings',JSON.stringify({transfer:+sTransfer.value,notary:+sNotary.value,interest:+sInterest.value,months:+sMonths.value,sellPct:+sSellPct.value,contPct:+sContPct.value}));loadDeals();alert('Rekenmodel opgeslagen')}
+function loadSettings(){let s=getSettings();sTransfer.value=s.transfer;sNotary.value=s.notary;sInterest.value=s.interest;sMonths.value=s.months;sSellPct.value=s.sellPct;sContPct.value=s.contPct}
+async function saveAlert(){let payload={min_profit:+aProfit.value,min_roi:+aRoi.value,max_price:+aMax.value,city:aCity.value};let r=await fetch(API+'/alerts',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});alert(r.ok?'Meldingsregel opgeslagen':'Opslaan mislukt')}
+async function loadStatus(){try{let r=await fetch(API+'/status'),s=await r.json();statusBox.innerHTML=`<b>Database:</b> <span class="${s.database?'ok':'warn'}">${s.database?'actief':'niet actief'}</span><br><b>Woningfeed:</b> ${s.listing_feed}<br><b>Kadaster-adapter:</b> ${s.kadaster}<br><b>Push:</b> ${s.push}` }catch(e){statusBox.innerHTML='Backend niet bereikbaar.'}}
+async function runImport(){let r=await fetch(API+'/import',{method:'POST'});let j=await r.json();alert(`${j.imported} woningen geïmporteerd`);loadDeals()}
+function showView(btn){document.querySelectorAll('main section').forEach(s=>s.classList.add('hidden'));document.getElementById(btn.dataset.view).classList.remove('hidden');document.querySelectorAll('nav button').forEach(b=>b.classList.remove('active'));btn.classList.add('active');if(btn.dataset.view==='statusView')loadStatus()}
+loadSettings();loadDeals();
+if('serviceWorker' in navigator)navigator.serviceWorker.register('service-worker.js');
+</script>
+</body></html>
