@@ -2,7 +2,7 @@ from flask import Flask, jsonify, request, send_from_directory
 import sqlite3, os, json
 from pathlib import Path
 
-BASE=Path(__file__).resolve().parent.parent
+BASE=Path(__file__).resolve().parent
 DB=BASE/"flipfinder.db"
 PUBLIC=BASE/"public"
 app=Flask(__name__, static_folder=str(PUBLIC), static_url_path="")
