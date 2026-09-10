@@ -4,7 +4,7 @@ from pathlib import Path
 
 BASE=Path(__file__).resolve().parent
 DB=BASE/"flipfinder.db"
-PUBLIC=BASE/"public"
+PUBLIC=BASE
 app=Flask(__name__, static_folder=str(PUBLIC), static_url_path="")
 
 DEMO=[
