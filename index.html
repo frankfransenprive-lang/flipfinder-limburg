@@ -485,6 +485,33 @@ function dealScore(p){
   score+=7;
  }
 
+ const comps=Number(
+  p.comparable_count||0
+ );
+
+ const basis=String(
+  p.valuation_basis||''
+ ).toLowerCase();
+
+ if(
+  basis.includes('vergelijkbare') &&
+  comps>=5
+ ){
+  score+=5;
+ }
+ else if(comps>=3){
+  score+=2;
+ }
+ else{
+  score-=10;
+ }
+
+ if(
+  p.analysis_status==='pending'
+ ){
+  score-=10;
+ }
+
  return Math.max(
   1,
   Math.min(
@@ -559,7 +586,23 @@ function card(p){
 
  const profit=Number(a.profit||0);
  const roi=Number(a.roi||0);
+ const compCount=
+  Number(p.comparable_count||0);
 
+ const medianM2=
+  Number(p.median_price_per_m2||0);
+
+ const valuationBasis=
+  p.valuation_basis||
+  'voorlopige schatting';
+
+ const valuationReady=
+  p.analysis_status==='done';
+
+ const valuationText=
+  valuationReady
+   ? valuationBasis
+   : 'vergelijkingsanalyse bezig';
  const sourceButton =
   p.source_url
   ? `<button class="secondary"
@@ -626,6 +669,32 @@ function card(p){
      <b>${roi.toFixed(1)}%</b>
      <span>ROI</span>
     </div>
+       <div style="
+    margin-top:10px;
+    padding:11px;
+    border-radius:12px;
+    background:#f8fafc;
+    font-size:12px;
+    line-height:1.55;
+   ">
+
+    <b>Waardering</b><br>
+
+    ${valuationText}<br>
+
+    ${
+     compCount>0
+      ? `${compCount} vergelijkbare woningen`
+      : `Nog geen bruikbare vergelijkingswoningen`
+    }
+
+    ${
+     medianM2>0
+      ? ` • mediaan ${euro(medianM2)}/m²`
+      : ``
+    }
+
+   </div>
 
    </div>
 
