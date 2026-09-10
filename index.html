@@ -10,13 +10,11 @@
 <style>
 :root{
  --bg:#f6f7fb;
- --card:#fff;
  --ink:#0f172a;
  --muted:#64748b;
  --line:#e2e8f0;
  --green:#047857;
  --red:#b91c1c;
- --blue:#2563eb;
 }
 
 *{box-sizing:border-box}
@@ -114,7 +112,10 @@ button{
  gap:10px;
 }
 
-.title{font-size:18px;font-weight:800}
+.title{
+ font-size:18px;
+ font-weight:800;
+}
 
 .sub{
  font-size:12px;
@@ -185,6 +186,15 @@ button{
  font-size:18px;
  color:#047857;
  margin-top:2px;
+}
+
+.valuation{
+ margin-top:10px;
+ padding:11px;
+ border-radius:12px;
+ background:#f8fafc;
+ font-size:12px;
+ line-height:1.55;
 }
 
 .actions{
@@ -378,7 +388,6 @@ nav button.active{
 
  </div>
 
-
  <div class="panel">
 
   <h3 class="section-title">Nieuwe woningen</h3>
@@ -470,9 +479,8 @@ const euro=n =>
 
 
 function dealScore(p){
-  function showCalculation(p){
- const a=p.analysis||{};
 
+ const a=p.analysis||{};
 
  const profit=Number(a.profit||0);
  const roi=Number(a.roi||0);
@@ -483,23 +491,30 @@ function dealScore(p){
 
  let score=35;
 
- // Nettowinst: belangrijkste onderdeel
- score += Math.max(-20,Math.min(25,(profit-15000)/1500));
+ score += Math.max(
+  -20,
+  Math.min(25,(profit-15000)/1500)
+ );
 
- // Rendement
- score += Math.max(-15,Math.min(20,(roi-5)*1.2));
+ score += Math.max(
+  -15,
+  Math.min(20,(roi-5)*1.2)
+ );
 
- // Vraagprijs per m² tegenover lokale vergelijkingen
  if(size>0 && price>0 && medianM2>0){
 
   const askingM2=price/size;
-  const discountPct=((medianM2-askingM2)/medianM2)*100;
 
-  score += Math.max(-15,Math.min(25,discountPct*1.25));
+  const discountPct=
+   ((medianM2-askingM2)/medianM2)*100;
+
+  score += Math.max(
+   -15,
+   Math.min(25,discountPct*1.25)
+  );
 
  }
 
- // Betrouwbaarheid vergelijkingswoningen
  if(comps>=8){
   score+=10;
  }
@@ -513,12 +528,10 @@ function dealScore(p){
   score-=10;
  }
 
- // Analyse nog niet klaar = lagere betrouwbaarheid
  if(p.analysis_status!=='done'){
   score-=10;
  }
 
- // Negatieve winst zwaar afstraffen
  if(profit<0){
   score-=15;
  }
@@ -529,6 +542,9 @@ function dealScore(p){
  );
 
 }
+
+
+function showCalculation(p){
 
  const a=p.analysis||{};
 
@@ -573,20 +589,12 @@ ${Number(a.roi||0).toFixed(1)}%
 Maximale aankoopprijs voor
 ${euro(a.target_profit)} winst:
 
-${euro(a.max_purchase_price)}
-
-LET OP:
-De verkoopwaarde is momenteel
-nog een voorlopige schatting.`;
+${euro(a.max_purchase_price)}`;
 
  alert(text);
 
 }
-}
 
-function showCalculation(p){
-
- const a=p.analysis||{};
 
 function card(p){
 
@@ -595,6 +603,7 @@ function card(p){
 
  const profit=Number(a.profit||0);
  const roi=Number(a.roi||0);
+
  const compCount=
   Number(p.comparable_count||0);
 
@@ -605,14 +614,12 @@ function card(p){
   p.valuation_basis||
   'voorlopige schatting';
 
- const valuationReady=
-  p.analysis_status==='done';
-
  const valuationText=
-  valuationReady
+  p.analysis_status==='done'
    ? valuationBasis
    : 'vergelijkingsanalyse bezig';
- const sourceButton =
+
+ const sourceButton=
   p.source_url
   ? `<button class="secondary"
        onclick="window.open('${p.source_url}','_blank')">
@@ -656,13 +663,13 @@ function card(p){
 
    </div>
 
-
    <div class="price">
     ${euro(p.price)}
    </div>
 
-
-   <div class="grid3" style="margin-top:11px">
+   <div
+    class="grid3"
+    style="margin-top:11px">
 
     <div class="stat">
      <b>${euro(a.renovation)}</b>
@@ -678,14 +685,10 @@ function card(p){
      <b>${roi.toFixed(1)}%</b>
      <span>ROI</span>
     </div>
-       <div style="
-    margin-top:10px;
-    padding:11px;
-    border-radius:12px;
-    background:#f8fafc;
-    font-size:12px;
-    line-height:1.55;
-   ">
+
+   </div>
+
+   <div class="valuation">
 
     <b>Waardering</b><br>
 
@@ -705,17 +708,20 @@ function card(p){
 
    </div>
 
-   </div>
+   <div
+    class="sub"
+    style="margin-top:12px">
 
-
-   <div class="sub" style="margin-top:12px">
     Geschatte nettowinst
+
    </div>
 
-   <div class="profit ${profit<0?'loss':''}">
+   <div
+    class="profit ${profit<0?'loss':''}">
+
     ${euro(profit)}
-   </div>
 
+   </div>
 
    <div class="maxbuy">
 
@@ -730,7 +736,6 @@ function card(p){
 
    </div>
 
-
    <div class="actions">
 
     ${sourceButton}
@@ -738,7 +743,9 @@ function card(p){
     <button
      class="ghost"
      onclick='showCalculation(${JSON.stringify(p)})'>
+
      Calculatie
+
     </button>
 
    </div>
@@ -757,7 +764,8 @@ async function loadDeals(){
 
  try{
 
-  const r=await fetch(API+'/properties');
+  const r=
+   await fetch(API+'/properties');
 
   if(!r.ok){
    throw new Error();
@@ -765,9 +773,12 @@ async function loadDeals(){
 
   data=await r.json();
 
- }catch(e){
+ }
+ catch(e){
 
-  cards.innerHTML=
+  document
+   .getElementById('cards')
+   .innerHTML=
    '<div class="panel">Backend niet bereikbaar.</div>';
 
   return;
@@ -786,13 +797,20 @@ async function loadDeals(){
 
  for(const id of ['city','aCity']){
 
-  const el=document.getElementById(id);
+  const el=
+   document.getElementById(id);
+
   const current=el.value;
 
   el.innerHTML=
    '<option value="">Heel Limburg</option>'+
    cities
-    .map(c=>`<option value="${c}">${c}</option>`)
+    .map(
+     c=>
+      `<option value="${c}">
+       ${c}
+       </option>`
+    )
     .join('');
 
   el.value=current;
@@ -800,16 +818,23 @@ async function loadDeals(){
  }
 
 
- const selectedCity=city.value;
+ const selectedCity=
+  document.getElementById('city').value;
 
  const max=
-  Number(maxPrice.value)||999999999;
+  Number(
+   document.getElementById('maxPrice').value
+  )||999999999;
 
  const minProfitValue=
-  Number(minProfit.value)||0;
+  Number(
+   document.getElementById('minProfit').value
+  );
 
  const minRoiValue=
-  Number(minRoi.value)||0;
+  Number(
+   document.getElementById('minRoi').value
+  );
 
 
  data=data.filter(p=>{
@@ -817,10 +842,23 @@ async function loadDeals(){
   const a=p.analysis||{};
 
   return(
-   (!selectedCity || p.city===selectedCity) &&
-   Number(p.price)<=max &&
-   Number(a.profit||0)>=minProfitValue &&
-   Number(a.roi||0)>=minRoiValue
+   (!selectedCity || p.city===selectedCity)
+   &&
+   Number(p.price)<=max
+   &&
+   Number(a.profit||0)>=
+   (
+    Number.isFinite(minProfitValue)
+     ? minProfitValue
+     : 0
+   )
+   &&
+   Number(a.roi||0)>=
+   (
+    Number.isFinite(minRoiValue)
+     ? minRoiValue
+     : 0
+   )
   );
 
  });
@@ -832,10 +870,13 @@ async function loadDeals(){
  );
 
 
- cards.innerHTML=
+ document
+  .getElementById('cards')
+  .innerHTML=
+
   data.length
-  ? data.map(card).join('')
-  : '<div class="panel">Geen deals binnen deze filters.</div>';
+   ? data.map(card).join('')
+   : '<div class="panel">Geen deals binnen deze filters.</div>';
 
 }
 
@@ -845,40 +886,48 @@ async function saveAlert(){
  const payload={
 
   min_profit:
-   Number(aProfit.value),
+   Number(
+    document.getElementById('aProfit').value
+   ),
 
   min_roi:
-   Number(aRoi.value),
+   Number(
+    document.getElementById('aRoi').value
+   ),
 
   max_price:
-   Number(aMax.value),
+   Number(
+    document.getElementById('aMax').value
+   ),
 
   city:
-   aCity.value
+   document.getElementById('aCity').value
 
  };
 
 
  try{
 
-  const r=await fetch(
-   API+'/alerts',
-   {
-    method:'POST',
-    headers:{
-     'Content-Type':'application/json'
-    },
-    body:JSON.stringify(payload)
-   }
-  );
+  const r=
+   await fetch(
+    API+'/alerts',
+    {
+     method:'POST',
+     headers:{
+      'Content-Type':'application/json'
+     },
+     body:JSON.stringify(payload)
+    }
+   );
 
   alert(
    r.ok
-   ? 'Meldingsregel opgeslagen'
-   : 'Opslaan mislukt'
+    ? 'Meldingsregel opgeslagen'
+    : 'Opslaan mislukt'
   );
 
- }catch(e){
+ }
+ catch(e){
 
   alert('Opslaan mislukt');
 
@@ -889,14 +938,25 @@ async function saveAlert(){
 
 async function loadStatus(){
 
+ const statusBox=
+  document.getElementById('statusBox');
+
+ const modelBox=
+  document.getElementById('modelBox');
+
  try{
 
-  const r=await fetch(API+'/status');
-  const s=await r.json();
+  const r=
+   await fetch(API+'/status');
+
+  const s=
+   await r.json();
+
 
   statusBox.innerHTML=`
 
    <b>Database:</b>
+
    <span class="${s.database?'ok':'warn'}">
     ${s.database?'actief':'niet actief'}
    </span>
@@ -914,8 +974,20 @@ async function loadStatus(){
    <br>
 
    <b>ReefAPI:</b>
-   <span class="${s.reefapi_key==='configured'?'ok':'warn'}">
-    ${s.reefapi_key==='configured'?'gekoppeld':'niet gekoppeld'}
+
+   <span
+    class="${
+     s.reefapi_key==='configured'
+      ?'ok'
+      :'warn'
+    }">
+
+    ${
+     s.reefapi_key==='configured'
+      ?'gekoppeld'
+      :'niet gekoppeld'
+    }
+
    </span>
 
    <br>
@@ -935,37 +1007,79 @@ async function loadStatus(){
   `;
 
 
-  const m=s.calculation_model||{};
+  const m=
+   s.calculation_model||{};
+
 
   modelBox.innerHTML=`
 
    <div class="row">
-    <span>Overdrachtsbelasting</span>
-    <b>${m.transfer_tax_pct||0}%</b>
+
+    <span>
+     Overdrachtsbelasting
+    </span>
+
+    <b>
+     ${m.transfer_tax_pct||0}%
+    </b>
+
    </div>
 
-   <div class="row">
-    <span>Financieringsrente</span>
-    <b>${m.interest_pct_year||0}% p.j.</b>
-   </div>
 
    <div class="row">
-    <span>Looptijd</span>
-    <b>${m.holding_months||0} maanden</b>
+
+    <span>
+     Financieringsrente
+    </span>
+
+    <b>
+     ${m.interest_pct_year||0}% p.j.
+    </b>
+
    </div>
 
-   <div class="row">
-    <span>Verkoopkosten</span>
-    <b>${m.selling_cost_pct||0}%</b>
-   </div>
 
    <div class="row">
-    <span>Gewenste minimale winst</span>
-    <b>${euro(m.target_profit)}</b>
+
+    <span>
+     Looptijd
+    </span>
+
+    <b>
+     ${m.holding_months||0} maanden
+    </b>
+
+   </div>
+
+
+   <div class="row">
+
+    <span>
+     Verkoopkosten
+    </span>
+
+    <b>
+     ${m.selling_cost_pct||0}%
+    </b>
+
+   </div>
+
+
+   <div class="row">
+
+    <span>
+     Gewenste minimale winst
+    </span>
+
+    <b>
+     ${euro(m.target_profit)}
+    </b>
+
    </div>
   `;
 
- }catch(e){
+ }
+ catch(e){
 
   statusBox.innerHTML=
    'Backend niet bereikbaar.';
@@ -982,16 +1096,20 @@ async function runImport(){
 
  try{
 
-  const r=await fetch(
-   API+'/import',
-   {method:'POST'}
-  );
+  const r=
+   await fetch(
+    API+'/import',
+    {
+     method:'POST'
+    }
+   );
 
   let j={};
 
   try{
    j=await r.json();
-  }catch(e){}
+  }
+  catch(e){}
 
 
   if(!r.ok || !j.ok){
@@ -999,8 +1117,8 @@ async function runImport(){
    alert(
     'Import mislukt: '+
     (
-     j.error ||
-     j.message ||
+     j.error||
+     j.message||
      'onbekende fout'
     )
    );
@@ -1017,8 +1135,8 @@ async function runImport(){
   await loadDeals();
   await loadStatus();
 
-
- }catch(e){
+ }
+ catch(e){
 
   alert(
    'Import mislukt: backend niet bereikbaar.'
@@ -1039,7 +1157,9 @@ function showView(btn){
 
 
  document
-  .getElementById(btn.dataset.view)
+  .getElementById(
+   btn.dataset.view
+  )
   .classList.remove('hidden');
 
 
@@ -1054,10 +1174,13 @@ function showView(btn){
 
 
  if(
-  btn.dataset.view==='statusView' ||
+  btn.dataset.view==='statusView'
+  ||
   btn.dataset.view==='settingsView'
  ){
+
   loadStatus();
+
  }
 
 }
