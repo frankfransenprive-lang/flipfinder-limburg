@@ -11,10 +11,11 @@ def _post(path, api_key, payload):
         data=json.dumps(payload).encode("utf-8"),
         method="POST",
         headers={
-            "x-api-key": api_key,
-            "content-type": "application/json",
-            "accept": "application/json",
-        },
+    "x-api-key": api_key,
+    "content-type": "application/json",
+    "accept": "application/json",
+    "user-agent": "FlipFinder-Limburg/1.0",
+}
     )
 
     try:
