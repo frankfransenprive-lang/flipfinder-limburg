@@ -3,23 +3,18 @@ import sqlite3
 import os
 from pathlib import Path
 
-from listing_adapter import fetch_listings
+from listing_adapter import fetch_listings, fetch_comparables
 
 
 BASE = Path(__file__).resolve().parent
 DB = BASE / "flipfinder.db"
-PUBLIC = BASE
 
 app = Flask(
     __name__,
-    static_folder=str(PUBLIC),
+    static_folder=str(BASE),
     static_url_path=""
 )
 
-
-# --------------------------------------------------
-# STANDAARD REKENMODEL
-# --------------------------------------------------
 
 DEFAULTS = {
     "transfer_tax_pct": 8.0,
@@ -32,14 +27,21 @@ DEFAULTS = {
 }
 
 
-# --------------------------------------------------
-# DATABASE
-# --------------------------------------------------
-
 def conn():
     c = sqlite3.connect(DB)
     c.row_factory = sqlite3.Row
     return c
+
+
+def column_exists(c, table, column):
+    rows = c.execute(
+        f"PRAGMA table_info({table})"
+    ).fetchall()
+
+    return any(
+        row["name"] == column
+        for row in rows
+    )
 
 
 def init_db():
@@ -72,17 +74,41 @@ def init_db():
     );
     """)
 
+    extra_columns = {
+        "postal_code": "TEXT",
+        "publish_date": "TEXT",
+        "image_url": "TEXT",
+        "comparable_count": "INTEGER DEFAULT 0",
+        "median_price_per_m2": "REAL DEFAULT 0",
+        "valuation_basis": "TEXT",
+    }
+
+    for name, sql_type in extra_columns.items():
+        if not column_exists(
+            c,
+            "properties",
+            name
+        ):
+            c.execute(
+                f"""
+                ALTER TABLE properties
+                ADD COLUMN {name} {sql_type}
+                """
+            )
+
     c.commit()
     c.close()
 
 
-# --------------------------------------------------
-# VERBOUWINGSKOSTEN
-# --------------------------------------------------
-
 def estimate_renovation(item):
-    size = float(item.get("size_m2") or 0)
-    label = str(item.get("energy_label") or "").upper()
+    size = float(
+        item.get("size_m2") or 0
+    )
+
+    label = str(
+        item.get("energy_label") or ""
+    ).upper()
+
     property_type = str(
         item.get("property_type") or ""
     ).lower()
@@ -90,172 +116,191 @@ def estimate_renovation(item):
     if size <= 0:
         return 40000
 
-    # Basis: normale cosmetische + technische renovatie
     cost_per_m2 = 350
 
-    # Slechter energielabel = gemiddeld meer werk
     if label == "D":
         cost_per_m2 += 40
-
     elif label == "E":
         cost_per_m2 += 80
-
     elif label == "F":
         cost_per_m2 += 120
-
     elif label == "G":
         cost_per_m2 += 160
 
-    # Appartement vaak iets goedkoper per m2
-    if "apartment" in property_type or "appartement" in property_type:
+    if (
+        "apartment" in property_type
+        or "appartement" in property_type
+    ):
         cost_per_m2 -= 50
 
-    # Vrijstaand vaak meer gevel/dak/installaties
-    if "detached" in property_type or "vrijstaand" in property_type:
+    if (
+        "detached" in property_type
+        or "vrijstaand" in property_type
+    ):
         cost_per_m2 += 75
 
-    renovation = size * cost_per_m2
+    renovation = (
+        size * cost_per_m2
+    )
 
-    return round(renovation / 1000) * 1000
+    return (
+        round(renovation / 1000)
+        * 1000
+    )
 
 
-# --------------------------------------------------
-# VOORLOPIGE VERKOOPWAARDE
-# --------------------------------------------------
-
-def estimate_resale(item, renovation):
-    """
-    Voorlopige verkoopwaarde.
-
-    Deze vervangen we later door een model
-    met vergelijkbare verkochte/aangeboden woningen
-    en marktwaarde per m2.
-    """
-
-    purchase_price = float(
+def fallback_resale(
+    item,
+    renovation
+):
+    price = float(
         item.get("price") or 0
     )
 
-    if purchase_price <= 0:
+    if price <= 0:
         return 0
 
-    # We gaan niet uit van €1 verbouwen = €1 waarde.
-    # Goede renovatie moet marge creëren.
-    added_value = renovation * 1.55
+    estimated = (
+        price
+        + renovation * 1.55
+    )
 
-    estimated = purchase_price + added_value
+    return (
+        round(estimated / 1000)
+        * 1000
+    )
 
-    return round(estimated / 1000) * 1000
-
-
-# --------------------------------------------------
-# VOLLEDIGE FLIP-CALCULATIE
-# --------------------------------------------------
 
 def calculate_flip(item):
-    price = float(item.get("price") or 0)
+    price = float(
+        item.get("price") or 0
+    )
 
     renovation = float(
-        item.get("renovation_estimate") or 0
+        item.get(
+            "renovation_estimate"
+        ) or 0
     )
 
     resale = float(
-        item.get("resale_estimate") or 0
+        item.get(
+            "resale_estimate"
+        ) or 0
     )
 
     transfer_tax = (
-        price *
-        DEFAULTS["transfer_tax_pct"] /
-        100
+        price
+        * DEFAULTS[
+            "transfer_tax_pct"
+        ]
+        / 100
     )
 
-    notary = DEFAULTS["notary_and_advice"]
+    notary = DEFAULTS[
+        "notary_and_advice"
+    ]
 
     contingency = (
-        renovation *
-        DEFAULTS["renovation_contingency_pct"] /
-        100
+        renovation
+        * DEFAULTS[
+            "renovation_contingency_pct"
+        ]
+        / 100
     )
 
-    # Financiering berekenen over aankoop + belasting +
-    # verbouwing + onvoorzien.
     financed_amount = (
-        price +
-        transfer_tax +
-        renovation +
-        contingency
+        price
+        + transfer_tax
+        + renovation
+        + contingency
     )
 
     financing_cost = (
-        financed_amount *
-        DEFAULTS["interest_pct_year"] /
-        100 *
-        (DEFAULTS["holding_months"] / 12)
+        financed_amount
+        * DEFAULTS[
+            "interest_pct_year"
+        ]
+        / 100
+        * (
+            DEFAULTS[
+                "holding_months"
+            ] / 12
+        )
     )
 
     selling_cost = (
-        resale *
-        DEFAULTS["selling_cost_pct"] /
-        100
+        resale
+        * DEFAULTS[
+            "selling_cost_pct"
+        ]
+        / 100
     )
 
     total_investment = (
-        price +
-        transfer_tax +
-        notary +
-        renovation +
-        contingency +
-        financing_cost +
-        selling_cost
+        price
+        + transfer_tax
+        + notary
+        + renovation
+        + contingency
+        + financing_cost
+        + selling_cost
     )
 
-    profit = resale - total_investment
+    profit = (
+        resale
+        - total_investment
+    )
 
-    if total_investment > 0:
-        roi = (
-            profit /
-            total_investment *
-            100
-        )
-    else:
-        roi = 0
-
-    # Max aankoopprijs waarbij nog minimaal
-    # target_profit overblijft.
-    fixed_non_purchase_costs = (
-        notary +
-        renovation +
-        contingency +
-        selling_cost
+    roi = (
+        profit
+        / total_investment
+        * 100
+        if total_investment > 0
+        else 0
     )
 
     interest_factor = (
-        DEFAULTS["interest_pct_year"] /
-        100 *
-        (DEFAULTS["holding_months"] / 12)
+        DEFAULTS[
+            "interest_pct_year"
+        ]
+        / 100
+        * (
+            DEFAULTS[
+                "holding_months"
+            ] / 12
+        )
     )
 
     transfer_factor = (
-        DEFAULTS["transfer_tax_pct"] /
-        100
+        DEFAULTS[
+            "transfer_tax_pct"
+        ]
+        / 100
     )
 
-    # Benadering waarbij aankoopprijs ook
-    # overdrachtsbelasting en financiering beïnvloedt.
+    fixed_non_purchase_costs = (
+        notary
+        + renovation
+        + contingency
+        + selling_cost
+    )
+
     denominator = (
-        1 +
-        transfer_factor +
-        interest_factor *
-        (1 + transfer_factor)
+        1
+        + transfer_factor
+        + interest_factor
+        * (1 + transfer_factor)
     )
 
     numerator = (
-        resale -
-        DEFAULTS["target_profit"] -
-        fixed_non_purchase_costs -
-        (
-            renovation +
-            contingency
+        resale
+        - DEFAULTS[
+            "target_profit"
+        ]
+        - fixed_non_purchase_costs
+        - (
+            renovation
+            + contingency
         ) * interest_factor
     )
 
@@ -266,92 +311,327 @@ def calculate_flip(item):
     )
 
     return {
-        "transfer_tax": round(transfer_tax),
-        "notary_and_advice": round(notary),
-        "renovation": round(renovation),
-        "contingency": round(contingency),
-        "financing_cost": round(financing_cost),
-        "selling_cost": round(selling_cost),
-        "total_investment": round(total_investment),
-        "estimated_resale": round(resale),
-        "profit": round(profit),
-        "roi": round(roi, 1),
-        "max_purchase_price": max(
-            0,
-            round(max_purchase_price / 1000) * 1000
-        ),
-        "target_profit": DEFAULTS["target_profit"],
+        "transfer_tax":
+            round(transfer_tax),
+
+        "notary_and_advice":
+            round(notary),
+
+        "renovation":
+            round(renovation),
+
+        "contingency":
+            round(contingency),
+
+        "financing_cost":
+            round(financing_cost),
+
+        "selling_cost":
+            round(selling_cost),
+
+        "total_investment":
+            round(total_investment),
+
+        "estimated_resale":
+            round(resale),
+
+        "profit":
+            round(profit),
+
+        "roi":
+            round(roi, 1),
+
+        "max_purchase_price":
+            max(
+                0,
+                round(
+                    max_purchase_price
+                    / 1000
+                ) * 1000
+            ),
+
+        "target_profit":
+            DEFAULTS[
+                "target_profit"
+            ],
     }
 
 
-# --------------------------------------------------
-# LIVE WONINGEN OPSLAAN
-# --------------------------------------------------
-
-def save_live_listings(listings):
+def save_live_listings(
+    listings,
+    api_key
+):
     c = conn()
 
     imported = 0
+    comparable_searches = 0
+
+    # Cache per plaats + type + m2-band.
+    # Zo zoeken we niet onnodig
+    # meerdere keren dezelfde markt.
+    comp_cache = {}
 
     for item in listings:
 
         source_id = str(
-            item.get("source_id") or ""
+            item.get(
+                "source_id"
+            ) or ""
         ).strip()
 
         if not source_id:
             continue
 
-        renovation = estimate_renovation(item)
-        resale = estimate_resale(
-            item,
-            renovation
+        renovation = (
+            estimate_renovation(
+                item
+            )
         )
+
+        city = str(
+            item.get("city") or ""
+        ).strip()
+
+        property_type = str(
+            item.get(
+                "property_type"
+            ) or ""
+        ).strip()
+
+        size_m2 = float(
+            item.get(
+                "size_m2"
+            ) or 0
+        )
+
+        # M2 in blokken van 20 m2
+        # voor hergebruik vergelijkingszoektocht.
+        size_band = (
+            round(size_m2 / 20)
+            * 20
+            if size_m2 > 0
+            else 0
+        )
+
+        cache_key = (
+            city.lower(),
+            property_type.lower(),
+            size_band
+        )
+
+        comparison = (
+            comp_cache.get(
+                cache_key
+            )
+        )
+
+        if comparison is None:
+
+            try:
+                comparison = (
+                    fetch_comparables(
+                        api_key=api_key,
+                        city=city,
+                        target_size_m2=
+                            size_m2,
+                        property_type=
+                            property_type,
+                        exclude_source_id=
+                            source_id,
+                        max_pages=1
+                    )
+                )
+
+                comparable_searches += 1
+
+            except Exception as e:
+
+                print(
+                    "Comparable fout:",
+                    city,
+                    repr(e)
+                )
+
+                comparison = {
+                    "count": 0,
+                    "median_price_per_m2": 0,
+                    "estimated_resale": 0,
+                    "basis":
+                        "fallback schatting"
+                }
+
+            comp_cache[
+                cache_key
+            ] = comparison
+
+        comparable_resale = float(
+            comparison.get(
+                "estimated_resale"
+            ) or 0
+        )
+
+        if (
+            comparison.get("count", 0)
+            >= 3
+            and comparable_resale > 0
+        ):
+            resale = (
+                comparable_resale
+            )
+
+            valuation_basis = (
+                "vergelijkbare "
+                "actuele vraagprijzen"
+            )
+
+        else:
+            resale = (
+                fallback_resale(
+                    item,
+                    renovation
+                )
+            )
+
+            valuation_basis = (
+                "voorlopige "
+                "fallback schatting"
+            )
 
         values = (
             source_id,
-            item.get("city", ""),
-            item.get("street", ""),
-            item.get("price", 0),
-            item.get("size_m2", 0),
-            item.get("plot_m2", 0),
-            item.get("energy_label", ""),
-            item.get("property_type", ""),
-            item.get("build_year"),
+            city,
+            item.get(
+                "street",
+                ""
+            ),
+            item.get(
+                "price",
+                0
+            ),
+            item.get(
+                "size_m2",
+                0
+            ),
+            item.get(
+                "plot_m2",
+                0
+            ),
+            item.get(
+                "energy_label",
+                ""
+            ),
+            property_type,
+            item.get(
+                "build_year"
+            ),
             renovation,
             resale,
-            item.get("source_url", "")
+            item.get(
+                "source_url",
+                ""
+            ),
+            item.get(
+                "postal_code",
+                ""
+            ),
+            item.get(
+                "publish_date",
+                ""
+            ),
+            item.get(
+                "image_url",
+                ""
+            ),
+            comparison.get(
+                "count",
+                0
+            ),
+            comparison.get(
+                "median_price_per_m2",
+                0
+            ),
+            valuation_basis
         )
 
         c.execute("""
-            INSERT INTO properties(
-                source_id,
-                city,
-                street,
-                price,
-                size_m2,
-                plot_m2,
-                energy_label,
-                property_type,
-                build_year,
-                renovation_estimate,
-                resale_estimate,
-                source_url
-            )
-            VALUES(?,?,?,?,?,?,?,?,?,?,?,?)
+        INSERT INTO properties(
+            source_id,
+            city,
+            street,
+            price,
+            size_m2,
+            plot_m2,
+            energy_label,
+            property_type,
+            build_year,
+            renovation_estimate,
+            resale_estimate,
+            source_url,
+            postal_code,
+            publish_date,
+            image_url,
+            comparable_count,
+            median_price_per_m2,
+            valuation_basis
+        )
+        VALUES(
+            ?,?,?,?,?,?,?,?,?,?,
+            ?,?,?,?,?,?,?,?
+        )
 
-            ON CONFLICT(source_id) DO UPDATE SET
-                city=excluded.city,
-                street=excluded.street,
-                price=excluded.price,
-                size_m2=excluded.size_m2,
-                plot_m2=excluded.plot_m2,
-                energy_label=excluded.energy_label,
-                property_type=excluded.property_type,
-                build_year=excluded.build_year,
-                renovation_estimate=excluded.renovation_estimate,
-                resale_estimate=excluded.resale_estimate,
-                source_url=excluded.source_url
+        ON CONFLICT(source_id)
+        DO UPDATE SET
+
+            city=
+                excluded.city,
+
+            street=
+                excluded.street,
+
+            price=
+                excluded.price,
+
+            size_m2=
+                excluded.size_m2,
+
+            plot_m2=
+                excluded.plot_m2,
+
+            energy_label=
+                excluded.energy_label,
+
+            property_type=
+                excluded.property_type,
+
+            build_year=
+                excluded.build_year,
+
+            renovation_estimate=
+                excluded.renovation_estimate,
+
+            resale_estimate=
+                excluded.resale_estimate,
+
+            source_url=
+                excluded.source_url,
+
+            postal_code=
+                excluded.postal_code,
+
+            publish_date=
+                excluded.publish_date,
+
+            image_url=
+                excluded.image_url,
+
+            comparable_count=
+                excluded.comparable_count,
+
+            median_price_per_m2=
+                excluded.median_price_per_m2,
+
+            valuation_basis=
+                excluded.valuation_basis
         """, values)
 
         imported += 1
@@ -359,7 +639,10 @@ def save_live_listings(listings):
     c.commit()
     c.close()
 
-    return imported
+    return (
+        imported,
+        comparable_searches
+    )
 
 
 def remove_demo_properties():
@@ -367,17 +650,16 @@ def remove_demo_properties():
 
     c.execute("""
         DELETE FROM properties
-        WHERE source_id LIKE 'ff-%'
-        OR source_url LIKE 'https://example.com/%'
+        WHERE
+        source_id LIKE 'ff-%'
+        OR
+        source_url LIKE
+        'https://example.com/%'
     """)
 
     c.commit()
     c.close()
 
-
-# --------------------------------------------------
-# WEBSITE
-# --------------------------------------------------
 
 @app.get("/")
 def home():
@@ -387,64 +669,19 @@ def home():
     )
 
 
-# --------------------------------------------------
-# WONINGEN
-# --------------------------------------------------
-
 @app.get("/api/properties")
 def properties():
-
-    city = request.args.get(
-        "city",
-        ""
-    ).strip()
-
-    max_price = request.args.get(
-        "max_price",
-        ""
-    ).strip()
-
-    sql = """
-        SELECT *
-        FROM properties
-        WHERE 1=1
-    """
-
-    params = []
-
-    if city:
-        sql += """
-            AND LOWER(city)
-            LIKE LOWER(?)
-        """
-
-        params.append(
-            f"%{city}%"
-        )
-
-    if max_price:
-        try:
-            sql += " AND price <= ?"
-
-            params.append(
-                float(max_price)
-            )
-
-        except ValueError:
-            pass
-
-    sql += """
-        ORDER BY created_at DESC
-    """
 
     c = conn()
 
     rows = [
         dict(r)
-        for r in c.execute(
-            sql,
-            params
-        )
+        for r in c.execute("""
+            SELECT *
+            FROM properties
+            ORDER BY
+            created_at DESC
+        """)
     ]
 
     c.close()
@@ -452,15 +689,16 @@ def properties():
     result = []
 
     for row in rows:
-        row["analysis"] = calculate_flip(row)
+        row[
+            "analysis"
+        ] = calculate_flip(
+            row
+        )
+
         result.append(row)
 
     return jsonify(result)
 
-
-# --------------------------------------------------
-# LIVE IMPORT
-# --------------------------------------------------
 
 @app.post("/api/import")
 def do_import():
@@ -470,33 +708,39 @@ def do_import():
     )
 
     if not api_key:
+
         return jsonify({
             "ok": False,
-            "error": (
-                "REEFAPI_KEY ontbreekt "
-                "in Railway"
-            )
+            "error":
+                "REEFAPI_KEY ontbreekt"
         }), 500
 
     try:
 
-        listings = fetch_listings(
-            api_key=api_key,
-            area="Limburg"
+        listings = (
+            fetch_listings(
+                api_key=
+                    api_key,
+                area=
+                    "Limburg"
+            )
         )
 
         if not listings:
+
             return jsonify({
                 "ok": False,
                 "imported": 0,
-                "message": (
-                    "ReefAPI reageerde, "
-                    "maar leverde geen woningen."
-                )
+                "message":
+                    "Geen woningen ontvangen."
             }), 502
 
-        imported = save_live_listings(
-            listings
+        (
+            imported,
+            comparable_searches
+        ) = save_live_listings(
+            listings,
+            api_key
         )
 
         if imported > 0:
@@ -504,9 +748,14 @@ def do_import():
 
         return jsonify({
             "ok": True,
-            "imported": imported,
-            "source": "ReefAPI",
-            "area": "Limburg"
+            "imported":
+                imported,
+            "comparable_searches":
+                comparable_searches,
+            "source":
+                "ReefAPI",
+            "area":
+                "Limburg"
         })
 
     except Exception as e:
@@ -521,10 +770,6 @@ def do_import():
             "error": str(e)
         }), 500
 
-
-# --------------------------------------------------
-# MELDINGEN
-# --------------------------------------------------
 
 @app.post("/api/alerts")
 def add_alert():
@@ -544,10 +789,19 @@ def add_alert():
         )
         VALUES(?,?,?,?)
     """, (
-        d.get("min_profit"),
-        d.get("min_roi"),
-        d.get("max_price"),
-        d.get("city", "")
+        d.get(
+            "min_profit"
+        ),
+        d.get(
+            "min_roi"
+        ),
+        d.get(
+            "max_price"
+        ),
+        d.get(
+            "city",
+            ""
+        )
     ))
 
     c.commit()
@@ -558,26 +812,22 @@ def add_alert():
     })
 
 
-# --------------------------------------------------
-# STATUS
-# --------------------------------------------------
-
 @app.get("/api/status")
 def status():
 
     api_key_present = bool(
-        os.getenv("REEFAPI_KEY")
+        os.getenv(
+            "REEFAPI_KEY"
+        )
     )
 
     c = conn()
 
     try:
-        count = c.execute(
-            """
+        count = c.execute("""
             SELECT COUNT(*)
             FROM properties
-            """
-        ).fetchone()[0]
+        """).fetchone()[0]
 
     except Exception:
         count = 0
@@ -585,33 +835,64 @@ def status():
     c.close()
 
     return jsonify({
-        "database": DB.exists(),
-        "properties": count,
-        "listing_feed": "ReefAPI",
-        "reefapi_key": (
-            "configured"
-            if api_key_present
-            else "missing"
-        ),
-        "area": "Limburg",
-        "kadaster": "uitgeschakeld",
-        "push": "nog niet gekoppeld",
+        "database":
+            DB.exists(),
+
+        "properties":
+            count,
+
+        "listing_feed":
+            "ReefAPI",
+
+        "reefapi_key":
+            (
+                "configured"
+                if api_key_present
+                else "missing"
+            ),
+
+        "area":
+            "Limburg",
+
+        "kadaster":
+            "uitgeschakeld",
+
+        "push":
+            "nog niet gekoppeld",
+
+        "valuation":
+            "vergelijkbare vraagprijzen",
+
         "calculation_model": {
+
             "transfer_tax_pct":
-                DEFAULTS["transfer_tax_pct"],
+                DEFAULTS[
+                    "transfer_tax_pct"
+                ],
+
             "interest_pct_year":
-                DEFAULTS["interest_pct_year"],
+                DEFAULTS[
+                    "interest_pct_year"
+                ],
+
             "holding_months":
-                DEFAULTS["holding_months"],
+                DEFAULTS[
+                    "holding_months"
+                ],
+
             "selling_cost_pct":
-                DEFAULTS["selling_cost_pct"],
+                DEFAULTS[
+                    "selling_cost_pct"
+                ],
+
             "target_profit":
-                DEFAULTS["target_profit"]
+                DEFAULTS[
+                    "target_profit"
+                ]
         }
     })
 
 
-# Gunicorn voert __main__ niet uit.
 init_db()
 
 
