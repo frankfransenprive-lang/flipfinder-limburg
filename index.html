@@ -473,57 +473,61 @@ function dealScore(p){
 
  const a=p.analysis||{};
 
- let score=50;
+ const profit=Number(a.profit||0);
+ const roi=Number(a.roi||0);
+ const price=Number(p.price||0);
+ const size=Number(p.size_m2||0);
+ const medianM2=Number(p.median_price_per_m2||0);
+ const comps=Number(p.comparable_count||0);
 
- score += ((a.profit||0)-30000)/3000;
- score += ((a.roi||0)-12)*1.5;
+ let score=35;
 
- if(
-  p.size_m2>0 &&
-  p.price/p.size_m2<2200
- ){
+ // Nettowinst: belangrijkste onderdeel
+ score += Math.max(-20,Math.min(25,(profit-15000)/1500));
+
+ // Rendement
+ score += Math.max(-15,Math.min(20,(roi-5)*1.2));
+
+ // Vraagprijs per m² tegenover lokale vergelijkingen
+ if(size>0 && price>0 && medianM2>0){
+
+  const askingM2=price/size;
+  const discountPct=((medianM2-askingM2)/medianM2)*100;
+
+  score += Math.max(-15,Math.min(25,discountPct*1.25));
+
+ }
+
+ // Betrouwbaarheid vergelijkingswoningen
+ if(comps>=8){
+  score+=10;
+ }
+ else if(comps>=5){
   score+=7;
  }
-
- const comps=Number(
-  p.comparable_count||0
- );
-
- const basis=String(
-  p.valuation_basis||''
- ).toLowerCase();
-
- if(
-  basis.includes('vergelijkbare') &&
-  comps>=5
- ){
-  score+=5;
- }
  else if(comps>=3){
-  score+=2;
+  score+=3;
  }
  else{
   score-=10;
  }
 
- if(
-  p.analysis_status==='pending'
- ){
+ // Analyse nog niet klaar = lagere betrouwbaarheid
+ if(p.analysis_status!=='done'){
   score-=10;
+ }
+
+ // Negatieve winst zwaar afstraffen
+ if(profit<0){
+  score-=15;
  }
 
  return Math.max(
   1,
-  Math.min(
-   99,
-   Math.round(score)
-  )
+  Math.min(99,Math.round(score))
  );
 
 }
-
-
-function showCalculation(p){
 
  const a=p.analysis||{};
 
