@@ -44,7 +44,7 @@ def import_demo():
     c.commit();c.close();return len(DEMO)
 
 @app.get("/")
-def home():return send_from_directory(PUBLIC,"index.html")
+def home():return send_from_directory(BASE,"index.html")
 
 @app.get("/api/properties")
 def properties():
