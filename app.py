@@ -5,7 +5,6 @@ import os
 import sqlite3
 import threading
 
-from datetime import datetime, timezone
 from pathlib import Path
 
 from listing_adapter import (
@@ -37,6 +36,21 @@ DEFAULTS = {
     "renovation_contingency_pct": 10.0,
     "target_profit": 30000,
 }
+
+
+# Eerste grote vulling:
+# 15 x maximaal 15 woningen = circa 225 woningen.
+BOOTSTRAP_MAX_PAGES = 15
+
+# Daarna zoeken we bij normale controles
+# maximaal 6 pagina's terug.
+NORMAL_MAX_PAGES = 6
+
+# Niet honderden vergelijkingsanalyses tegelijk.
+ANALYSIS_BATCH_SIZE = 30
+
+# Vergelijkingsresultaten 12 uur hergebruiken.
+COMPARABLE_CACHE_HOURS = 12
 
 
 analysis_lock = threading.Lock()
@@ -110,6 +124,11 @@ def init_db():
         result_json TEXT NOT NULL,
         fetched_at TEXT DEFAULT CURRENT_TIMESTAMP
     );
+
+    CREATE TABLE IF NOT EXISTS app_settings(
+        key TEXT PRIMARY KEY,
+        value TEXT
+    );
     """)
 
     extra_columns = {
@@ -156,12 +175,76 @@ def init_db():
 
 
 # ==================================================
+# INSTELLINGEN
+# ==================================================
+
+def get_setting(
+    key,
+    default=""
+):
+
+    c = conn()
+
+    row = c.execute(
+        """
+        SELECT value
+        FROM app_settings
+        WHERE key = ?
+        """,
+        (
+            key,
+        )
+    ).fetchone()
+
+    c.close()
+
+    if not row:
+        return default
+
+    return str(
+        row["value"] or default
+    )
+
+
+def set_setting(
+    key,
+    value
+):
+
+    c = conn()
+
+    c.execute(
+        """
+        INSERT INTO app_settings(
+            key,
+            value
+        )
+        VALUES(
+            ?,?
+        )
+
+        ON CONFLICT(key)
+        DO UPDATE SET
+            value = excluded.value
+        """,
+        (
+            key,
+            str(value)
+        )
+    )
+
+    c.commit()
+    c.close()
+
+
+# ==================================================
 # VERBOUWINGSKOSTEN
 # ==================================================
 
 def estimate_renovation(item):
 
     try:
+
         size = float(
             item.get("size_m2") or 0
         )
@@ -170,16 +253,21 @@ def estimate_renovation(item):
         TypeError,
         ValueError
     ):
+
         size = 0
 
 
     label = str(
-        item.get("energy_label") or ""
+        item.get(
+            "energy_label"
+        ) or ""
     ).upper().strip()
 
 
     property_type = str(
-        item.get("property_type") or ""
+        item.get(
+            "property_type"
+        ) or ""
     ).lower().strip()
 
 
@@ -208,6 +296,7 @@ def estimate_renovation(item):
         or
         "appartement" in property_type
     ):
+
         cost_per_m2 -= 50
 
 
@@ -216,6 +305,7 @@ def estimate_renovation(item):
         or
         "vrijstaand" in property_type
     ):
+
         cost_per_m2 += 75
 
 
@@ -227,7 +317,8 @@ def estimate_renovation(item):
     return (
         round(
             renovation / 1000
-        ) * 1000
+        )
+        * 1000
     )
 
 
@@ -241,6 +332,7 @@ def fallback_resale(
 ):
 
     try:
+
         price = float(
             item.get("price") or 0
         )
@@ -249,6 +341,7 @@ def fallback_resale(
         TypeError,
         ValueError
     ):
+
         price = 0
 
 
@@ -265,7 +358,8 @@ def fallback_resale(
     return (
         round(
             estimated / 1000
-        ) * 1000
+        )
+        * 1000
     )
 
 
@@ -365,10 +459,13 @@ def calculate_flip(item):
 
 
     roi = (
+
         profit
         / total_investment
         * 100
+
         if total_investment > 0
+
         else 0
     )
 
@@ -491,6 +588,197 @@ def calculate_flip(item):
 
 
 # ==================================================
+# BEKENDE WONINGEN
+# ==================================================
+
+def known_source_ids():
+
+    c = conn()
+
+    rows = c.execute(
+        """
+        SELECT source_id
+        FROM properties
+        """
+    ).fetchall()
+
+    c.close()
+
+    return {
+        str(
+            row["source_id"]
+        )
+        for row in rows
+        if row["source_id"]
+    }
+
+
+def property_count():
+
+    c = conn()
+
+    count = c.execute(
+        """
+        SELECT COUNT(*)
+        FROM properties
+        """
+    ).fetchone()[0]
+
+    c.close()
+
+    return int(
+        count or 0
+    )
+
+
+# ==================================================
+# SLIMME LIMBURG IMPORT
+# ==================================================
+
+def fetch_limburg_smart(
+    api_key
+):
+
+    known = (
+        known_source_ids()
+    )
+
+    bootstrap_done = (
+        get_setting(
+            "bootstrap_complete",
+            "0"
+        )
+        == "1"
+    )
+
+
+    # Als de database nog klein is en de grote
+    # beginimport nog niet uitgevoerd werd:
+    bootstrap = (
+        not bootstrap_done
+    )
+
+
+    max_pages = (
+
+        BOOTSTRAP_MAX_PAGES
+
+        if bootstrap
+
+        else NORMAL_MAX_PAGES
+    )
+
+
+    collected = []
+    collected_ids = set()
+
+    pages_used = 0
+    known_boundary_reached = False
+
+
+    for page in range(
+        1,
+        max_pages + 1
+    ):
+
+        listings = (
+            fetch_listings(
+                api_key=
+                    api_key,
+                area=
+                    "Limburg",
+                page=
+                    page
+            )
+        )
+
+
+        pages_used += 1
+
+
+        if not listings:
+            break
+
+
+        known_on_page = 0
+
+
+        for item in listings:
+
+            source_id = str(
+                item.get(
+                    "source_id"
+                ) or ""
+            ).strip()
+
+
+            if not source_id:
+                continue
+
+
+            if source_id in known:
+                known_on_page += 1
+
+
+            if source_id in collected_ids:
+                continue
+
+
+            collected_ids.add(
+                source_id
+            )
+
+            collected.append(
+                item
+            )
+
+
+        # Bij de eerste grote import bewust
+        # verder zoeken om de database te vullen.
+        if bootstrap:
+            continue
+
+
+        # Bij normale controles stoppen zodra
+        # we duidelijk terug zijn bij woningen
+        # die al in FlipFinder stonden.
+        if known_on_page >= 5:
+
+            known_boundary_reached = True
+            break
+
+
+    if bootstrap:
+
+        set_setting(
+            "bootstrap_complete",
+            "1"
+        )
+
+
+    set_setting(
+        "last_import_pages",
+        pages_used
+    )
+
+
+    return {
+
+        "listings":
+            collected,
+
+        "pages_used":
+            pages_used,
+
+        "bootstrap":
+            bootstrap,
+
+        "known_boundary_reached":
+            known_boundary_reached,
+    }
+
+
+# ==================================================
 # WONINGEN OPSLAAN
 # ==================================================
 
@@ -499,7 +787,8 @@ def save_basic_listings(listings):
     c = conn()
 
     imported = 0
-    new_or_changed = 0
+    new_count = 0
+    changed_count = 0
 
 
     for item in listings:
@@ -516,7 +805,9 @@ def save_basic_listings(listings):
 
 
         renovation = (
-            estimate_renovation(item)
+            estimate_renovation(
+                item
+            )
         )
 
 
@@ -534,8 +825,7 @@ def save_basic_listings(listings):
                 price,
                 size_m2,
                 property_type,
-                city,
-                analysis_status
+                city
             FROM properties
             WHERE source_id = ?
             """,
@@ -546,12 +836,18 @@ def save_basic_listings(listings):
 
 
         price = float(
-            item.get("price") or 0
+            item.get(
+                "price"
+            ) or 0
         )
 
+
         size_m2 = float(
-            item.get("size_m2") or 0
+            item.get(
+                "size_m2"
+            ) or 0
         )
+
 
         property_type = str(
             item.get(
@@ -559,52 +855,17 @@ def save_basic_listings(listings):
             ) or ""
         )
 
+
         city = str(
-            item.get("city") or ""
+            item.get(
+                "city"
+            ) or ""
         )
 
 
-        changed = False
-
-
         if existing is None:
 
-            changed = True
-
-        else:
-
-            old_price = float(
-                existing["price"] or 0
-            )
-
-            old_size = float(
-                existing["size_m2"] or 0
-            )
-
-            old_type = str(
-                existing[
-                    "property_type"
-                ] or ""
-            )
-
-            old_city = str(
-                existing["city"] or ""
-            )
-
-
-            if (
-                old_price != price
-                or
-                old_size != size_m2
-                or
-                old_type != property_type
-                or
-                old_city != city
-            ):
-                changed = True
-
-
-        if existing is None:
+            new_count += 1
 
             c.execute(
                 """
@@ -696,6 +957,40 @@ def save_basic_listings(listings):
 
         else:
 
+            old_price = float(
+                existing["price"]
+                or 0
+            )
+
+            old_size = float(
+                existing["size_m2"]
+                or 0
+            )
+
+            old_type = str(
+                existing[
+                    "property_type"
+                ]
+                or ""
+            )
+
+            old_city = str(
+                existing["city"]
+                or ""
+            )
+
+
+            changed = (
+                old_price != price
+                or
+                old_size != size_m2
+                or
+                old_type != property_type
+                or
+                old_city != city
+            )
+
+
             c.execute(
                 """
                 UPDATE properties
@@ -773,6 +1068,8 @@ def save_basic_listings(listings):
 
             if changed:
 
+                changed_count += 1
+
                 c.execute(
                     """
                     UPDATE properties
@@ -793,10 +1090,6 @@ def save_basic_listings(listings):
                 )
 
 
-        if changed:
-            new_or_changed += 1
-
-
         imported += 1
 
 
@@ -805,9 +1098,15 @@ def save_basic_listings(listings):
 
 
     return {
-        "imported": imported,
-        "new_or_changed":
-            new_or_changed
+
+        "processed":
+            imported,
+
+        "new":
+            new_count,
+
+        "changed":
+            changed_count,
     }
 
 
@@ -815,25 +1114,42 @@ def save_basic_listings(listings):
 # PENDING WONINGEN
 # ==================================================
 
-def get_pending_properties():
+def get_pending_properties(
+    limit=None
+):
+
+    sql = """
+        SELECT *
+        FROM properties
+        WHERE
+            analysis_status = 'pending'
+            OR analysis_status IS NULL
+        ORDER BY
+            publish_date DESC,
+            created_at DESC
+    """
+
+    params = []
+
+
+    if limit:
+
+        sql += """
+            LIMIT ?
+        """
+
+        params.append(
+            int(limit)
+        )
+
 
     c = conn()
 
     rows = [
-
         dict(row)
-
         for row in c.execute(
-            """
-            SELECT *
-            FROM properties
-            WHERE
-                analysis_status = 'pending'
-                OR analysis_status IS NULL
-            ORDER BY
-                publish_date DESC,
-                created_at DESC
-            """
+            sql,
+            params
         ).fetchall()
     ]
 
@@ -843,7 +1159,7 @@ def get_pending_properties():
 
 
 # ==================================================
-# COMPARABLE CACHE
+# VERGELIJKINGSCACHE
 # ==================================================
 
 def make_cache_key(
@@ -853,6 +1169,7 @@ def make_cache_key(
 ):
 
     try:
+
         size = float(
             size_m2 or 0
         )
@@ -861,6 +1178,7 @@ def make_cache_key(
         TypeError,
         ValueError
     ):
+
         size = 0
 
 
@@ -891,7 +1209,7 @@ def get_cached_comparison(
     c = conn()
 
     row = c.execute(
-        """
+        f"""
         SELECT result_json
         FROM comparable_cache
         WHERE
@@ -899,7 +1217,7 @@ def get_cached_comparison(
             AND datetime(fetched_at)
                 >= datetime(
                     'now',
-                    '-12 hours'
+                    '-{COMPARABLE_CACHE_HOURS} hours'
                 )
         """,
         (
@@ -964,7 +1282,7 @@ def save_cached_comparison(
 
 
 # ==================================================
-# VERGELIJKINGSANALYSE
+# ANALYSERESULTAAT
 # ==================================================
 
 def update_analysis_result(
@@ -1001,9 +1319,9 @@ def update_analysis_result(
     c.close()
 
 
-def mark_analysis_done_with_fallback(
+def mark_fallback(
     item,
-    reason="voorlopige fallback schatting"
+    reason
 ):
 
     source_id = str(
@@ -1014,7 +1332,9 @@ def mark_analysis_done_with_fallback(
 
 
     renovation = (
-        estimate_renovation(item)
+        estimate_renovation(
+            item
+        )
     )
 
 
@@ -1027,13 +1347,22 @@ def mark_analysis_done_with_fallback(
 
 
     update_analysis_result(
-        source_id=source_id,
-        resale=resale,
-        count=0,
-        median_m2=0,
-        basis=reason
+        source_id=
+            source_id,
+        resale=
+            resale,
+        count=
+            0,
+        median_m2=
+            0,
+        basis=
+            reason
     )
 
+
+# ==================================================
+# VERGELIJKINGSANALYSE
+# ==================================================
 
 def run_comparable_analysis(
     listings,
@@ -1097,7 +1426,7 @@ def run_comparable_analysis(
                 size_m2 <= 0
             ):
 
-                mark_analysis_done_with_fallback(
+                mark_fallback(
                     item,
                     "onvoldoende woninggegevens"
                 )
@@ -1134,10 +1463,6 @@ def run_comparable_analysis(
 
                 try:
 
-                    # Maximaal 2 pagina's:
-                    # maximaal circa 30 actuele
-                    # vraagprijswoningen per
-                    # unieke vergelijkingsgroep.
                     comparison = (
                         fetch_comparables(
                             api_key=
@@ -1150,7 +1475,8 @@ def run_comparable_analysis(
                                 property_type,
                             exclude_source_id=
                                 source_id,
-                            max_pages=2
+                            max_pages=
+                                2
                         )
                     )
 
@@ -1171,7 +1497,7 @@ def run_comparable_analysis(
                     )
 
 
-                    mark_analysis_done_with_fallback(
+                    mark_fallback(
                         item,
                         "vergelijking tijdelijk niet beschikbaar"
                     )
@@ -1191,40 +1517,24 @@ def run_comparable_analysis(
             )
 
 
-            try:
-
-                median_m2 = float(
-                    comparison.get(
-                        "median_price_per_m2"
-                    ) or 0
-                )
-
-            except (
-                TypeError,
-                ValueError
-            ):
-
-                median_m2 = 0
+            median_m2 = float(
+                comparison.get(
+                    "median_price_per_m2"
+                ) or 0
+            )
 
 
-            try:
-
-                comp_resale = float(
-                    comparison.get(
-                        "estimated_resale"
-                    ) or 0
-                )
-
-            except (
-                TypeError,
-                ValueError
-            ):
-
-                comp_resale = 0
+            comp_resale = float(
+                comparison.get(
+                    "estimated_resale"
+                ) or 0
+            )
 
 
             renovation = (
-                estimate_renovation(item)
+                estimate_renovation(
+                    item
+                )
             )
 
 
@@ -1330,7 +1640,7 @@ def start_analysis(
 
 
 # ==================================================
-# DEMO DATA VERWIJDEREN
+# DEMO DATA
 # ==================================================
 
 def remove_demo_properties():
@@ -1433,9 +1743,7 @@ def properties():
     c = conn()
 
     rows = [
-
         dict(r)
-
         for r in c.execute(
             sql,
             params
@@ -1445,23 +1753,22 @@ def properties():
     c.close()
 
 
-    result = []
-
-
     for row in rows:
 
         row["analysis"] = (
-            calculate_flip(row)
+            calculate_flip(
+                row
+            )
         )
 
-        result.append(row)
 
-
-    return jsonify(result)
+    return jsonify(
+        rows
+    )
 
 
 # ==================================================
-# IMPORT
+# SLIMME IMPORT
 # ==================================================
 
 @app.post("/api/import")
@@ -1483,25 +1790,27 @@ def do_import():
 
     try:
 
-        listings = (
-            fetch_listings(
-                api_key=
-                    api_key,
-                area=
-                    "Limburg",
-                page=1
+        feed = (
+            fetch_limburg_smart(
+                api_key
             )
+        )
+
+
+        listings = (
+            feed["listings"]
         )
 
 
         if not listings:
 
             return jsonify({
-                "ok": False,
-                "imported": 0,
+                "ok": True,
+                "processed": 0,
+                "new": 0,
                 "message":
-                    "Geen woningen ontvangen."
-            }), 502
+                    "Geen nieuwe woningen gevonden."
+            })
 
 
         save_result = (
@@ -1511,39 +1820,28 @@ def do_import():
         )
 
 
-        imported = (
-            save_result[
-                "imported"
-            ]
-        )
+        remove_demo_properties()
 
 
-        new_or_changed = (
-            save_result[
-                "new_or_changed"
-            ]
-        )
-
-
-        if imported > 0:
-            remove_demo_properties()
-
-
-        # Belangrijk:
-        # analyseert niet alleen de zojuist
-        # opgehaalde woningen maar OOK oude
-        # woningen die ooit op 'pending'
-        # zijn blijven hangen.
-        pending_listings = (
-            get_pending_properties()
+        # Maximaal 30 pending woningen
+        # per ronde analyseren.
+        pending_batch = (
+            get_pending_properties(
+                ANALYSIS_BATCH_SIZE
+            )
         )
 
 
         started = (
             start_analysis(
-                pending_listings,
+                pending_batch,
                 api_key
             )
+        )
+
+
+        total_properties = (
+            property_count()
         )
 
 
@@ -1552,22 +1850,38 @@ def do_import():
             "ok":
                 True,
 
-            "imported":
-                imported,
+            "processed":
+                save_result[
+                    "processed"
+                ],
 
-            "new_or_changed":
-                new_or_changed,
+            "new":
+                save_result[
+                    "new"
+                ],
 
-            "pending_analysis":
+            "changed":
+                save_result[
+                    "changed"
+                ],
+
+            "pages_used":
+                feed[
+                    "pages_used"
+                ],
+
+            "bootstrap":
+                feed[
+                    "bootstrap"
+                ],
+
+            "database_total":
+                total_properties,
+
+            "analysis_batch":
                 len(
-                    pending_listings
+                    pending_batch
                 ),
-
-            "source":
-                "ReefAPI",
-
-            "area":
-                "Limburg",
 
             "analysis":
                 (
@@ -1577,12 +1891,17 @@ def do_import():
                     "loopt al of niets te analyseren"
                 ),
 
+            "source":
+                "ReefAPI",
+
+            "area":
+                "Limburg",
+
             "message":
                 (
-                    f"{imported} woningen opgehaald. "
-                    f"{len(pending_listings)} woningen "
-                    "staan klaar voor "
-                    "vergelijkingsanalyse."
+                    f"{save_result['new']} nieuwe woningen. "
+                    f"Database bevat nu "
+                    f"{total_properties} woningen."
                 )
         })
 
@@ -1595,7 +1914,6 @@ def do_import():
             flush=True
         )
 
-
         return jsonify({
             "ok": False,
             "error": str(e)
@@ -1603,7 +1921,7 @@ def do_import():
 
 
 # ==================================================
-# ANALYSE HANDMATIG OPNIEUW STARTEN
+# VOLGENDE ANALYSEBATCH
 # ==================================================
 
 @app.post("/api/analyse")
@@ -1623,14 +1941,16 @@ def analyse_pending():
         }), 500
 
 
-    pending_listings = (
-        get_pending_properties()
+    listings = (
+        get_pending_properties(
+            ANALYSIS_BATCH_SIZE
+        )
     )
 
 
     started = (
         start_analysis(
-            pending_listings,
+            listings,
             api_key
         )
     )
@@ -1641,9 +1961,9 @@ def analyse_pending():
         "ok":
             True,
 
-        "pending":
+        "batch":
             len(
-                pending_listings
+                listings
             ),
 
         "analysis":
@@ -1669,7 +1989,6 @@ def add_alert():
 
 
     c = conn()
-
 
     c.execute(
         """
@@ -1703,7 +2022,6 @@ def add_alert():
             )
         )
     )
-
 
     c.commit()
     c.close()
@@ -1762,13 +2080,13 @@ def status():
 
 
         cached = c.execute(
-            """
+            f"""
             SELECT COUNT(*)
             FROM comparable_cache
             WHERE datetime(fetched_at)
                 >= datetime(
                     'now',
-                    '-12 hours'
+                    '-{COMPARABLE_CACHE_HOURS} hours'
                 )
             """
         ).fetchone()[0]
@@ -1828,8 +2146,20 @@ def status():
         "comparable_cache_groups":
             cached,
 
-        "comparable_cache_hours":
-            12,
+        "bootstrap_complete":
+            (
+                get_setting(
+                    "bootstrap_complete",
+                    "0"
+                )
+                == "1"
+            ),
+
+        "last_import_pages":
+            get_setting(
+                "last_import_pages",
+                "0"
+            ),
 
         "calculation_model": {
 
