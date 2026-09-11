@@ -15,6 +15,7 @@
  --line:#e2e8f0;
  --green:#047857;
  --red:#b91c1c;
+ --amber:#b45309;
 }
 
 *{box-sizing:border-box}
@@ -51,8 +52,15 @@ main{
  box-shadow:0 3px 14px rgba(15,23,42,.05);
 }
 
-.panel{padding:14px;margin-bottom:14px}
-.card{overflow:hidden;margin-bottom:14px}
+.panel{
+ padding:14px;
+ margin-bottom:14px;
+}
+
+.card{
+ overflow:hidden;
+ margin-bottom:14px;
+}
 
 .grid{
  display:grid;
@@ -90,9 +98,20 @@ button{
  font-size:14px;
 }
 
-.primary{background:#0f172a;color:#fff}
-.secondary{background:#eff6ff;color:#1d4ed8}
-.ghost{background:#f1f5f9;color:#0f172a}
+.primary{
+ background:#0f172a;
+ color:#fff;
+}
+
+.secondary{
+ background:#eff6ff;
+ color:#1d4ed8;
+}
+
+.ghost{
+ background:#f1f5f9;
+ color:#0f172a;
+}
 
 .hero{
  height:145px;
@@ -166,7 +185,9 @@ button{
  color:var(--green);
 }
 
-.loss{color:var(--red)}
+.loss{
+ color:var(--red);
+}
 
 .maxbuy{
  margin-top:10px;
@@ -197,13 +218,44 @@ button{
  line-height:1.55;
 }
 
+.signals{
+ display:grid;
+ gap:7px;
+ margin-top:10px;
+}
+
+.signal{
+ padding:10px 11px;
+ border-radius:12px;
+ font-size:12px;
+ font-weight:800;
+ line-height:1.35;
+}
+
+.signal.good{
+ background:#ecfdf5;
+ color:#047857;
+}
+
+.signal.bad{
+ background:#fef2f2;
+ color:#b91c1c;
+}
+
+.signal.neutral{
+ background:#fff7ed;
+ color:#b45309;
+}
+
 .actions{
  display:flex;
  gap:8px;
  margin-top:12px;
 }
 
-.actions button{flex:1}
+.actions button{
+ flex:1;
+}
 
 .row{
  display:flex;
@@ -214,7 +266,9 @@ button{
  font-size:13px;
 }
 
-.row:last-child{border-bottom:0}
+.row:last-child{
+ border-bottom:0;
+}
 
 .section-title{
  font-size:16px;
@@ -236,8 +290,15 @@ button{
  line-height:1.55;
 }
 
-.ok{color:var(--green);font-weight:800}
-.warn{color:#b45309;font-weight:800}
+.ok{
+ color:var(--green);
+ font-weight:800;
+}
+
+.warn{
+ color:var(--amber);
+ font-weight:800;
+}
 
 nav{
  position:fixed;
@@ -270,13 +331,21 @@ nav button.active{
  color:#0f172a;
 }
 
-.hidden{display:none}
+.hidden{
+ display:none;
+}
 
 @media(max-width:560px){
- .grid,.grid3{grid-template-columns:1fr 1fr}
- .grid3 .stat:last-child{grid-column:1/-1}
+ .grid,.grid3{
+  grid-template-columns:1fr 1fr;
+ }
+
+ .grid3 .stat:last-child{
+  grid-column:1/-1;
+ }
 }
 </style>
+
 </head>
 
 <body>
@@ -303,17 +372,26 @@ nav button.active{
 
    <div>
     <label>Max. vraagprijs</label>
-    <input id="maxPrice" type="number" value="2000000">
+    <input
+     id="maxPrice"
+     type="number"
+     value="2000000">
    </div>
 
    <div>
     <label>Min. nettowinst</label>
-    <input id="minProfit" type="number" value="-1000000">
+    <input
+     id="minProfit"
+     type="number"
+     value="-1000000">
    </div>
 
    <div>
     <label>Min. ROI %</label>
-    <input id="minRoi" type="number" value="-100">
+    <input
+     id="minRoi"
+     type="number"
+     value="-100">
    </div>
 
   </div>
@@ -336,29 +414,42 @@ nav button.active{
 
  <div class="panel">
 
-  <h3 class="section-title">Meldingsregels</h3>
+  <h3 class="section-title">
+   Meldingsregels
+  </h3>
 
   <div class="grid">
 
    <div>
     <label>Min. nettowinst</label>
-    <input id="aProfit" type="number" value="30000">
+    <input
+     id="aProfit"
+     type="number"
+     value="30000">
    </div>
 
    <div>
     <label>Min. ROI %</label>
-    <input id="aRoi" type="number" value="12">
+    <input
+     id="aRoi"
+     type="number"
+     value="12">
    </div>
 
    <div>
     <label>Max. vraagprijs</label>
-    <input id="aMax" type="number" value="400000">
+    <input
+     id="aMax"
+     type="number"
+     value="400000">
    </div>
 
    <div>
     <label>Plaats</label>
     <select id="aCity">
-     <option value="">Heel Limburg</option>
+     <option value="">
+      Heel Limburg
+     </option>
     </select>
    </div>
 
@@ -380,9 +471,13 @@ nav button.active{
 
  <div class="panel">
 
-  <h3 class="section-title">Koppelingen</h3>
+  <h3 class="section-title">
+   Koppelingen
+  </h3>
 
-  <div id="statusBox" class="status">
+  <div
+   id="statusBox"
+   class="status">
    Status laden…
   </div>
 
@@ -390,7 +485,9 @@ nav button.active{
 
  <div class="panel">
 
-  <h3 class="section-title">Nieuwe woningen</h3>
+  <h3 class="section-title">
+   Nieuwe woningen
+  </h3>
 
   <p class="notice">
    Haal de nieuwste woningen uit Limburg op.
@@ -413,14 +510,18 @@ nav button.active{
 
  <div class="panel">
 
-  <h3 class="section-title">Rekenmodel</h3>
+  <h3 class="section-title">
+   Rekenmodel
+  </h3>
 
   <p class="notice">
    Het centrale FlipFinder-rekenmodel draait op de server.
    De onderstaande uitgangspunten worden momenteel gebruikt.
   </p>
 
-  <div id="modelBox" class="status">
+  <div
+   id="modelBox"
+   class="status">
    Rekenmodel laden…
   </div>
 
@@ -432,34 +533,36 @@ nav button.active{
 
 
 <nav>
+
 <div class="inner">
 
-<button
- class="active"
- data-view="dealsView"
- onclick="showView(this)">
- 🏠<br>Deals
-</button>
+ <button
+  class="active"
+  data-view="dealsView"
+  onclick="showView(this)">
+  🏠<br>Deals
+ </button>
 
-<button
- data-view="alertsView"
- onclick="showView(this)">
- 🔔<br>Meldingen
-</button>
+ <button
+  data-view="alertsView"
+  onclick="showView(this)">
+  🔔<br>Meldingen
+ </button>
 
-<button
- data-view="statusView"
- onclick="showView(this)">
- 🔌<br>Koppelingen
-</button>
+ <button
+  data-view="statusView"
+  onclick="showView(this)">
+  🔌<br>Koppelingen
+ </button>
 
-<button
- data-view="settingsView"
- onclick="showView(this)">
- ⚙️<br>Instellingen
-</button>
+ <button
+  data-view="settingsView"
+  onclick="showView(this)">
+  ⚙️<br>Instellingen
+ </button>
 
 </div>
+
 </nav>
 
 
@@ -467,7 +570,7 @@ nav button.active{
 
 const API='/api';
 
-const euro=n =>
+const euro=n=>
  new Intl.NumberFormat(
   'nl-NL',
   {
@@ -482,35 +585,64 @@ function dealScore(p){
 
  const a=p.analysis||{};
 
- const profit=Number(a.profit||0);
- const roi=Number(a.roi||0);
- const price=Number(p.price||0);
- const size=Number(p.size_m2||0);
- const medianM2=Number(p.median_price_per_m2||0);
- const comps=Number(p.comparable_count||0);
+ const profit=
+  Number(a.profit||0);
+
+ const roi=
+  Number(a.roi||0);
+
+ const price=
+  Number(p.price||0);
+
+ const size=
+  Number(p.size_m2||0);
+
+ const medianM2=
+  Number(p.median_price_per_m2||0);
+
+ const comps=
+  Number(p.comparable_count||0);
 
  let score=35;
 
- score += Math.max(
+ score+=Math.max(
   -20,
-  Math.min(25,(profit-15000)/1500)
+  Math.min(
+   25,
+   (profit-15000)/1500
+  )
  );
 
- score += Math.max(
+ score+=Math.max(
   -15,
-  Math.min(20,(roi-5)*1.2)
+  Math.min(
+   20,
+   (roi-5)*1.2
+  )
  );
 
- if(size>0 && price>0 && medianM2>0){
+ if(
+  size>0 &&
+  price>0 &&
+  medianM2>0
+ ){
 
-  const askingM2=price/size;
+  const askingM2=
+   price/size;
 
   const discountPct=
-   ((medianM2-askingM2)/medianM2)*100;
+   (
+    (medianM2-askingM2)
+    /
+    medianM2
+   )*100;
 
-  score += Math.max(
+  score+=Math.max(
    -15,
-   Math.min(25,discountPct*1.25)
+   Math.min(
+    25,
+    discountPct*1.25
+   )
   );
 
  }
@@ -528,7 +660,9 @@ function dealScore(p){
   score-=10;
  }
 
- if(p.analysis_status!=='done'){
+ if(
+  p.analysis_status!=='done'
+ ){
   score-=10;
  }
 
@@ -538,8 +672,130 @@ function dealScore(p){
 
  return Math.max(
   1,
-  Math.min(99,Math.round(score))
+  Math.min(
+   99,
+   Math.round(score)
+  )
  );
+
+}
+
+
+function dealSignals(p){
+
+ const a=p.analysis||{};
+
+ const price=
+  Number(p.price||0);
+
+ const size=
+  Number(p.size_m2||0);
+
+ const medianM2=
+  Number(
+   p.median_price_per_m2||0
+  );
+
+ const maxBuy=
+  Number(
+   a.max_purchase_price||0
+  );
+
+ const signals=[];
+
+
+ if(
+  price>0 &&
+  size>0 &&
+  medianM2>0
+ ){
+
+  const askingM2=
+   price/size;
+
+  const diffPct=
+   (
+    (medianM2-askingM2)
+    /
+    medianM2
+   )*100;
+
+  const abs=
+   Math.abs(diffPct)
+    .toFixed(1)
+    .replace('.',',');
+
+
+  if(diffPct>=2){
+
+   signals.push(
+    `<div class="signal good">
+     ⬇️ ${abs}% onder lokale vraagprijs/m²
+     </div>`
+   );
+
+  }
+
+  else if(diffPct<=-2){
+
+   signals.push(
+    `<div class="signal bad">
+     ⬆️ ${abs}% boven lokale vraagprijs/m²
+     </div>`
+   );
+
+  }
+
+  else{
+
+   signals.push(
+    `<div class="signal neutral">
+     ↔️ ongeveer gelijk aan lokale vraagprijs/m²
+     </div>`
+   );
+
+  }
+
+ }
+
+
+ if(
+  price>0 &&
+  maxBuy>0
+ ){
+
+  const gap=
+   maxBuy-price;
+
+
+  if(gap>=0){
+
+   signals.push(
+    `<div class="signal good">
+     ✅ ${euro(gap)} onder jouw max. aankoopprijs
+     </div>`
+   );
+
+  }
+
+  else{
+
+   signals.push(
+    `<div class="signal bad">
+     ⚠️ ${euro(Math.abs(gap))} boven jouw max. aankoopprijs
+     </div>`
+   );
+
+  }
+
+ }
+
+
+ return signals.length
+  ? `<div class="signals">
+      ${signals.join('')}
+     </div>`
+  : '';
 
 }
 
@@ -548,7 +804,7 @@ function showCalculation(p){
 
  const a=p.analysis||{};
 
- const text =
+ const text=
 `FLIP-CALCULATIE
 
 Vraagprijs:
@@ -599,16 +855,25 @@ ${euro(a.max_purchase_price)}`;
 function card(p){
 
  const a=p.analysis||{};
- const score=dealScore(p);
 
- const profit=Number(a.profit||0);
- const roi=Number(a.roi||0);
+ const score=
+  dealScore(p);
+
+ const profit=
+  Number(a.profit||0);
+
+ const roi=
+  Number(a.roi||0);
 
  const compCount=
-  Number(p.comparable_count||0);
+  Number(
+   p.comparable_count||0
+  );
 
  const medianM2=
-  Number(p.median_price_per_m2||0);
+  Number(
+   p.median_price_per_m2||0
+  );
 
  const valuationBasis=
   p.valuation_basis||
@@ -619,17 +884,25 @@ function card(p){
    ? valuationBasis
    : 'vergelijkingsanalyse bezig';
 
+
  const sourceButton=
   p.source_url
-  ? `<button class="secondary"
-       onclick="window.open('${p.source_url}','_blank')">
-       Bron
+
+  ? `<button
+      class="secondary"
+      onclick="window.open('${p.source_url}','_blank')">
+      Bron
      </button>`
-  : `<button class="secondary" disabled>
-       Geen bron
+
+  : `<button
+      class="secondary"
+      disabled>
+      Geen bron
      </button>`;
 
+
  return `
+
  <article class="card">
 
   <div class="hero">
@@ -648,65 +921,118 @@ function card(p){
      </div>
 
      <div class="sub">
+
       ${p.property_type||'woning'}
+
       • ${p.size_m2||'-'} m²
-      • bouwjaar ${p.build_year||'-'}
-      • label ${p.energy_label||'-'}
+
+      • bouwjaar
+      ${p.build_year||'-'}
+
+      • label
+      ${p.energy_label||'-'}
+
      </div>
 
     </div>
 
+
     <div class="score">
+
      ${score}
-     <small>DEAL SCORE</small>
+
+     <small>
+      DEAL SCORE
+     </small>
+
     </div>
 
    </div>
 
+
    <div class="price">
     ${euro(p.price)}
    </div>
+
 
    <div
     class="grid3"
     style="margin-top:11px">
 
     <div class="stat">
-     <b>${euro(a.renovation)}</b>
-     <span>renovatie</span>
+
+     <b>
+      ${euro(a.renovation)}
+     </b>
+
+     <span>
+      renovatie
+     </span>
+
     </div>
 
-    <div class="stat">
-     <b>${euro(a.estimated_resale)}</b>
-     <span>geschatte verkoop</span>
-    </div>
 
     <div class="stat">
-     <b>${roi.toFixed(1)}%</b>
-     <span>ROI</span>
+
+     <b>
+      ${euro(a.estimated_resale)}
+     </b>
+
+     <span>
+      geschatte verkoop
+     </span>
+
+    </div>
+
+
+    <div class="stat">
+
+     <b>
+      ${roi.toFixed(1)}%
+     </b>
+
+     <span>
+      ROI
+     </span>
+
     </div>
 
    </div>
 
+
    <div class="valuation">
 
-    <b>Waardering</b><br>
+    <b>
+     Waardering
+    </b>
 
-    ${valuationText}<br>
+    <br>
+
+    ${valuationText}
+
+    <br>
 
     ${
      compCount>0
-      ? `${compCount} vergelijkbare woningen`
-      : `Nog geen bruikbare vergelijkingswoningen`
+
+     ? `${compCount} vergelijkbare woningen`
+
+     : `Nog geen bruikbare vergelijkingswoningen`
     }
 
     ${
      medianM2>0
-      ? ` • mediaan ${euro(medianM2)}/m²`
-      : ``
+
+     ? ` • mediaan ${euro(medianM2)}/m²`
+
+     : ``
     }
 
    </div>
+
+
+   ${dealSignals(p)}
+
 
    <div
     class="sub"
@@ -716,6 +1042,7 @@ function card(p){
 
    </div>
 
+
    <div
     class="profit ${profit<0?'loss':''}">
 
@@ -723,11 +1050,14 @@ function card(p){
 
    </div>
 
+
    <div class="maxbuy">
 
     <span>
+
      Maximale aankoopprijs voor
      ${euro(a.target_profit)} winst
+
     </span>
 
     <b>
@@ -735,6 +1065,7 @@ function card(p){
     </b>
 
    </div>
+
 
    <div class="actions">
 
@@ -753,6 +1084,7 @@ function card(p){
   </div>
 
  </article>
+
  `;
 
 }
@@ -762,18 +1094,23 @@ async function loadDeals(){
 
  let data;
 
+
  try{
 
   const r=
-   await fetch(API+'/properties');
+   await fetch(
+    API+'/properties'
+   );
 
   if(!r.ok){
    throw new Error();
   }
 
-  data=await r.json();
+  data=
+   await r.json();
 
  }
+
  catch(e){
 
   document
@@ -787,23 +1124,35 @@ async function loadDeals(){
 
 
  const cities=[
+
   ...new Set(
+
    data
     .map(x=>x.city)
     .filter(Boolean)
+
   )
+
  ].sort();
 
 
- for(const id of ['city','aCity']){
+ for(
+  const id of
+  ['city','aCity']
+ ){
 
   const el=
    document.getElementById(id);
 
-  const current=el.value;
+  const current=
+   el.value;
 
   el.innerHTML=
-   '<option value="">Heel Limburg</option>'+
+
+   '<option value="">Heel Limburg</option>'
+
+   +
+
    cities
     .map(
      c=>
@@ -813,60 +1162,102 @@ async function loadDeals(){
     )
     .join('');
 
-  el.value=current;
+  el.value=
+   current;
 
  }
 
 
  const selectedCity=
-  document.getElementById('city').value;
+  document
+   .getElementById('city')
+   .value;
+
 
  const max=
   Number(
-   document.getElementById('maxPrice').value
-  )||999999999;
+   document
+    .getElementById('maxPrice')
+    .value
+  )
+  ||
+  999999999;
+
 
  const minProfitValue=
   Number(
-   document.getElementById('minProfit').value
+   document
+    .getElementById('minProfit')
+    .value
   );
+
 
  const minRoiValue=
   Number(
-   document.getElementById('minRoi').value
+   document
+    .getElementById('minRoi')
+    .value
   );
 
 
- data=data.filter(p=>{
+ data=
+  data.filter(
+   p=>{
 
-  const a=p.analysis||{};
+    const a=
+     p.analysis||{};
 
-  return(
-   (!selectedCity || p.city===selectedCity)
-   &&
-   Number(p.price)<=max
-   &&
-   Number(a.profit||0)>=
-   (
-    Number.isFinite(minProfitValue)
-     ? minProfitValue
-     : 0
-   )
-   &&
-   Number(a.roi||0)>=
-   (
-    Number.isFinite(minRoiValue)
-     ? minRoiValue
-     : 0
-   )
+    return(
+
+     (
+      !selectedCity
+      ||
+      p.city===selectedCity
+     )
+
+     &&
+
+     Number(p.price)<=max
+
+     &&
+
+     Number(a.profit||0)
+     >=
+     (
+      Number.isFinite(
+       minProfitValue
+      )
+
+      ? minProfitValue
+
+      : 0
+     )
+
+     &&
+
+     Number(a.roi||0)
+     >=
+     (
+      Number.isFinite(
+       minRoiValue
+      )
+
+      ? minRoiValue
+
+      : 0
+     )
+
+    );
+
+   }
   );
-
- });
 
 
  data.sort(
   (a,b)=>
-   dealScore(b)-dealScore(a)
+   dealScore(b)
+   -
+   dealScore(a)
  );
 
 
@@ -875,8 +1266,12 @@ async function loadDeals(){
   .innerHTML=
 
   data.length
-   ? data.map(card).join('')
-   : '<div class="panel">Geen deals binnen deze filters.</div>';
+
+  ? data
+     .map(card)
+     .join('')
+
+  : '<div class="panel">Geen deals binnen deze filters.</div>';
 
 }
 
@@ -887,21 +1282,29 @@ async function saveAlert(){
 
   min_profit:
    Number(
-    document.getElementById('aProfit').value
+    document
+     .getElementById('aProfit')
+     .value
    ),
 
   min_roi:
    Number(
-    document.getElementById('aRoi').value
+    document
+     .getElementById('aRoi')
+     .value
    ),
 
   max_price:
    Number(
-    document.getElementById('aMax').value
+    document
+     .getElementById('aMax')
+     .value
    ),
 
   city:
-   document.getElementById('aCity').value
+   document
+    .getElementById('aCity')
+    .value
 
  };
 
@@ -910,26 +1313,43 @@ async function saveAlert(){
 
   const r=
    await fetch(
+
     API+'/alerts',
+
     {
+
      method:'POST',
+
      headers:{
-      'Content-Type':'application/json'
+      'Content-Type':
+       'application/json'
      },
-     body:JSON.stringify(payload)
+
+     body:
+      JSON.stringify(payload)
+
     }
+
    );
 
+
   alert(
+
    r.ok
-    ? 'Meldingsregel opgeslagen'
-    : 'Opslaan mislukt'
+
+   ? 'Meldingsregel opgeslagen'
+
+   : 'Opslaan mislukt'
+
   );
 
  }
+
  catch(e){
 
-  alert('Opslaan mislukt');
+  alert(
+   'Opslaan mislukt'
+  );
 
  }
 
@@ -939,15 +1359,20 @@ async function saveAlert(){
 async function loadStatus(){
 
  const statusBox=
-  document.getElementById('statusBox');
+  document
+   .getElementById('statusBox');
 
  const modelBox=
-  document.getElementById('modelBox');
+  document
+   .getElementById('modelBox');
+
 
  try{
 
   const r=
-   await fetch(API+'/status');
+   await fetch(
+    API+'/status'
+   );
 
   const s=
    await r.json();
@@ -955,55 +1380,82 @@ async function loadStatus(){
 
   statusBox.innerHTML=`
 
-   <b>Database:</b>
-
-   <span class="${s.database?'ok':'warn'}">
-    ${s.database?'actief':'niet actief'}
-   </span>
-
-   <br>
-
-   <b>Woningen in database:</b>
-   ${s.properties||0}
-
-   <br>
-
-   <b>Woningfeed:</b>
-   ${s.listing_feed||'-'}
-
-   <br>
-
-   <b>ReefAPI:</b>
+   <b>
+    Database:
+   </b>
 
    <span
-    class="${
-     s.reefapi_key==='configured'
-      ?'ok'
-      :'warn'
-    }">
+    class="${s.database?'ok':'warn'}">
 
     ${
-     s.reefapi_key==='configured'
-      ?'gekoppeld'
-      :'niet gekoppeld'
+     s.database
+      ? 'actief'
+      : 'niet actief'
     }
 
    </span>
 
    <br>
 
-   <b>Gebied:</b>
+   <b>
+    Woningen in database:
+   </b>
+
+   ${s.properties||0}
+
+   <br>
+
+   <b>
+    Woningfeed:
+   </b>
+
+   ${s.listing_feed||'-'}
+
+   <br>
+
+   <b>
+    ReefAPI:
+   </b>
+
+   <span
+    class="${
+     s.reefapi_key==='configured'
+      ? 'ok'
+      : 'warn'
+    }">
+
+    ${
+     s.reefapi_key==='configured'
+      ? 'gekoppeld'
+      : 'niet gekoppeld'
+    }
+
+   </span>
+
+   <br>
+
+   <b>
+    Gebied:
+   </b>
+
    ${s.area||'Limburg'}
 
    <br>
 
-   <b>Kadaster:</b>
+   <b>
+    Kadaster:
+   </b>
+
    ${s.kadaster||'uitgeschakeld'}
 
    <br>
 
-   <b>Push:</b>
+   <b>
+    Push:
+   </b>
+
    ${s.push||'-'}
+
   `;
 
 
@@ -1076,9 +1528,11 @@ async function loadStatus(){
     </b>
 
    </div>
+
   `;
 
  }
+
  catch(e){
 
   statusBox.innerHTML=
@@ -1098,29 +1552,49 @@ async function runImport(){
 
   const r=
    await fetch(
+
     API+'/import',
+
     {
      method:'POST'
     }
+
    );
+
 
   let j={};
 
+
   try{
-   j=await r.json();
+
+   j=
+    await r.json();
+
   }
+
   catch(e){}
 
 
-  if(!r.ok || !j.ok){
+  if(
+   !r.ok
+   ||
+   !j.ok
+  ){
 
    alert(
-    'Import mislukt: '+
+
+    'Import mislukt: '
+
+    +
+
     (
-     j.error||
-     j.message||
+     j.error
+     ||
+     j.message
+     ||
      'onbekende fout'
     )
+
    );
 
    return;
@@ -1132,10 +1606,13 @@ async function runImport(){
    `${j.imported||0} woningen opgehaald`
   );
 
+
   await loadDeals();
+
   await loadStatus();
 
  }
+
  catch(e){
 
   alert(
@@ -1150,9 +1627,12 @@ async function runImport(){
 function showView(btn){
 
  document
-  .querySelectorAll('main section')
+  .querySelectorAll(
+   'main section'
+  )
   .forEach(
-   s=>s.classList.add('hidden')
+   s=>
+    s.classList.add('hidden')
   );
 
 
@@ -1164,13 +1644,18 @@ function showView(btn){
 
 
  document
-  .querySelectorAll('nav button')
+  .querySelectorAll(
+   'nav button'
+  )
   .forEach(
-   b=>b.classList.remove('active')
+   b=>
+    b.classList.remove('active')
   );
 
 
- btn.classList.add('active');
+ btn.classList.add(
+  'active'
+ );
 
 
  if(
@@ -1187,14 +1672,20 @@ function showView(btn){
 
 
 loadDeals();
+
 loadStatus();
 
 
-if('serviceWorker' in navigator){
+if(
+ 'serviceWorker'
+ in navigator
+){
 
- navigator.serviceWorker.register(
-  'service-worker.js'
- );
+ navigator
+  .serviceWorker
+  .register(
+   'service-worker.js'
+  );
 
 }
 
