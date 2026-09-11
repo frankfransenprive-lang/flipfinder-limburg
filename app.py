@@ -1,11 +1,22 @@
 from flask import Flask, jsonify, request, send_from_directory
-import sqlite3
+
+import json
 import os
+import sqlite3
 import threading
+
+from datetime import datetime, timezone
 from pathlib import Path
 
-from listing_adapter import fetch_listings, fetch_comparables
+from listing_adapter import (
+    fetch_listings,
+    fetch_comparables,
+)
 
+
+# ==================================================
+# BASIS
+# ==================================================
 
 BASE = Path(__file__).resolve().parent
 DB = BASE / "flipfinder.db"
@@ -32,11 +43,12 @@ analysis_lock = threading.Lock()
 analysis_running = False
 
 
-# --------------------------------------------------
+# ==================================================
 # DATABASE
-# --------------------------------------------------
+# ==================================================
 
 def conn():
+
     c = sqlite3.connect(
         DB,
         timeout=30
@@ -47,7 +59,12 @@ def conn():
     return c
 
 
-def column_exists(c, table, column):
+def column_exists(
+    c,
+    table,
+    column
+):
+
     rows = c.execute(
         f"PRAGMA table_info({table})"
     ).fetchall()
@@ -59,6 +76,7 @@ def column_exists(c, table, column):
 
 
 def init_db():
+
     c = conn()
 
     c.executescript("""
@@ -86,16 +104,36 @@ def init_db():
         city TEXT,
         created_at TEXT DEFAULT CURRENT_TIMESTAMP
     );
+
+    CREATE TABLE IF NOT EXISTS comparable_cache(
+        cache_key TEXT PRIMARY KEY,
+        result_json TEXT NOT NULL,
+        fetched_at TEXT DEFAULT CURRENT_TIMESTAMP
+    );
     """)
 
     extra_columns = {
-        "postal_code": "TEXT",
-        "publish_date": "TEXT",
-        "image_url": "TEXT",
-        "comparable_count": "INTEGER DEFAULT 0",
-        "median_price_per_m2": "REAL DEFAULT 0",
-        "valuation_basis": "TEXT",
-        "analysis_status": "TEXT DEFAULT 'pending'",
+
+        "postal_code":
+            "TEXT",
+
+        "publish_date":
+            "TEXT",
+
+        "image_url":
+            "TEXT",
+
+        "comparable_count":
+            "INTEGER DEFAULT 0",
+
+        "median_price_per_m2":
+            "REAL DEFAULT 0",
+
+        "valuation_basis":
+            "TEXT",
+
+        "analysis_status":
+            "TEXT DEFAULT 'pending'",
     }
 
     for name, sql_type in extra_columns.items():
@@ -105,6 +143,7 @@ def init_db():
             "properties",
             name
         ):
+
             c.execute(
                 f"""
                 ALTER TABLE properties
@@ -116,28 +155,40 @@ def init_db():
     c.close()
 
 
-# --------------------------------------------------
+# ==================================================
 # VERBOUWINGSKOSTEN
-# --------------------------------------------------
+# ==================================================
 
 def estimate_renovation(item):
 
-    size = float(
-        item.get("size_m2") or 0
-    )
+    try:
+        size = float(
+            item.get("size_m2") or 0
+        )
+
+    except (
+        TypeError,
+        ValueError
+    ):
+        size = 0
+
 
     label = str(
         item.get("energy_label") or ""
-    ).upper()
+    ).upper().strip()
+
 
     property_type = str(
         item.get("property_type") or ""
-    ).lower()
+    ).lower().strip()
+
 
     if size <= 0:
         return 40000
 
+
     cost_per_m2 = 350
+
 
     if label == "D":
         cost_per_m2 += 40
@@ -151,12 +202,14 @@ def estimate_renovation(item):
     elif label == "G":
         cost_per_m2 += 160
 
+
     if (
         "apartment" in property_type
         or
         "appartement" in property_type
     ):
         cost_per_m2 -= 50
+
 
     if (
         "detached" in property_type
@@ -165,9 +218,11 @@ def estimate_renovation(item):
     ):
         cost_per_m2 += 75
 
+
     renovation = (
         size * cost_per_m2
     )
+
 
     return (
         round(
@@ -176,26 +231,36 @@ def estimate_renovation(item):
     )
 
 
-# --------------------------------------------------
-# FALLBACK VERKOOPWAARDE
-# --------------------------------------------------
+# ==================================================
+# VOORLOPIGE VERKOOPWAARDE
+# ==================================================
 
 def fallback_resale(
     item,
     renovation
 ):
 
-    price = float(
-        item.get("price") or 0
-    )
+    try:
+        price = float(
+            item.get("price") or 0
+        )
+
+    except (
+        TypeError,
+        ValueError
+    ):
+        price = 0
+
 
     if price <= 0:
         return 0
+
 
     estimated = (
         price
         + renovation * 1.55
     )
+
 
     return (
         round(
@@ -204,9 +269,9 @@ def fallback_resale(
     )
 
 
-# --------------------------------------------------
+# ==================================================
 # FLIP BEREKENING
-# --------------------------------------------------
+# ==================================================
 
 def calculate_flip(item):
 
@@ -226,6 +291,7 @@ def calculate_flip(item):
         ) or 0
     )
 
+
     transfer_tax = (
         price
         * DEFAULTS[
@@ -234,9 +300,11 @@ def calculate_flip(item):
         / 100
     )
 
+
     notary = DEFAULTS[
         "notary_and_advice"
     ]
+
 
     contingency = (
         renovation
@@ -246,12 +314,14 @@ def calculate_flip(item):
         / 100
     )
 
+
     financed_amount = (
         price
         + transfer_tax
         + renovation
         + contingency
     )
+
 
     financing_cost = (
         financed_amount
@@ -262,9 +332,11 @@ def calculate_flip(item):
         * (
             DEFAULTS[
                 "holding_months"
-            ] / 12
+            ]
+            / 12
         )
     )
+
 
     selling_cost = (
         resale
@@ -273,6 +345,7 @@ def calculate_flip(item):
         ]
         / 100
     )
+
 
     total_investment = (
         price
@@ -284,10 +357,12 @@ def calculate_flip(item):
         + selling_cost
     )
 
+
     profit = (
         resale
         - total_investment
     )
+
 
     roi = (
         profit
@@ -297,6 +372,7 @@ def calculate_flip(item):
         else 0
     )
 
+
     interest_factor = (
         DEFAULTS[
             "interest_pct_year"
@@ -305,9 +381,11 @@ def calculate_flip(item):
         * (
             DEFAULTS[
                 "holding_months"
-            ] / 12
+            ]
+            / 12
         )
     )
+
 
     transfer_factor = (
         DEFAULTS[
@@ -316,6 +394,7 @@ def calculate_flip(item):
         / 100
     )
 
+
     fixed_non_purchase_costs = (
         notary
         + renovation
@@ -323,14 +402,17 @@ def calculate_flip(item):
         + selling_cost
     )
 
+
     denominator = (
         1
         + transfer_factor
         + interest_factor
         * (
-            1 + transfer_factor
+            1
+            + transfer_factor
         )
     )
+
 
     numerator = (
         resale
@@ -341,14 +423,20 @@ def calculate_flip(item):
         - (
             renovation
             + contingency
-        ) * interest_factor
+        )
+        * interest_factor
     )
 
+
     max_purchase_price = (
+
         numerator / denominator
+
         if denominator > 0
+
         else 0
     )
+
 
     return {
 
@@ -380,7 +468,10 @@ def calculate_flip(item):
             round(profit),
 
         "roi":
-            round(roi, 1),
+            round(
+                roi,
+                1
+            ),
 
         "max_purchase_price":
             max(
@@ -388,7 +479,8 @@ def calculate_flip(item):
                 round(
                     max_purchase_price
                     / 1000
-                ) * 1000
+                )
+                * 1000
             ),
 
         "target_profit":
@@ -398,15 +490,17 @@ def calculate_flip(item):
     }
 
 
-# --------------------------------------------------
-# WONINGEN DIRECT OPSLAAN
-# --------------------------------------------------
+# ==================================================
+# WONINGEN OPSLAAN
+# ==================================================
 
 def save_basic_listings(listings):
 
     c = conn()
 
     imported = 0
+    new_or_changed = 0
+
 
     for item in listings:
 
@@ -416,14 +510,15 @@ def save_basic_listings(listings):
             ) or ""
         ).strip()
 
+
         if not source_id:
             continue
 
+
         renovation = (
-            estimate_renovation(
-                item
-            )
+            estimate_renovation(item)
         )
+
 
         fallback = (
             fallback_resale(
@@ -432,157 +527,513 @@ def save_basic_listings(listings):
             )
         )
 
-        values = (
 
-            source_id,
+        existing = c.execute(
+            """
+            SELECT
+                price,
+                size_m2,
+                property_type,
+                city,
+                analysis_status
+            FROM properties
+            WHERE source_id = ?
+            """,
+            (
+                source_id,
+            )
+        ).fetchone()
 
-            item.get(
-                "city",
-                ""
-            ),
 
-            item.get(
-                "street",
-                ""
-            ),
-
-            item.get(
-                "price",
-                0
-            ),
-
-            item.get(
-                "size_m2",
-                0
-            ),
-
-            item.get(
-                "plot_m2",
-                0
-            ),
-
-            item.get(
-                "energy_label",
-                ""
-            ),
-
-            item.get(
-                "property_type",
-                ""
-            ),
-
-            item.get(
-                "build_year"
-            ),
-
-            renovation,
-
-            fallback,
-
-            item.get(
-                "source_url",
-                ""
-            ),
-
-            item.get(
-                "postal_code",
-                ""
-            ),
-
-            item.get(
-                "publish_date",
-                ""
-            ),
-
-            item.get(
-                "image_url",
-                ""
-            ),
+        price = float(
+            item.get("price") or 0
         )
 
-        c.execute("""
-        INSERT INTO properties(
-            source_id,
-            city,
-            street,
-            price,
-            size_m2,
-            plot_m2,
-            energy_label,
-            property_type,
-            build_year,
-            renovation_estimate,
-            resale_estimate,
-            source_url,
-            postal_code,
-            publish_date,
-            image_url,
-            comparable_count,
-            median_price_per_m2,
-            valuation_basis,
-            analysis_status
-        )
-        VALUES(
-            ?,?,?,?,?,?,?,?,?,?,
-            ?,?,?,?,?,0,0,
-            'voorlopige fallback schatting',
-            'pending'
+        size_m2 = float(
+            item.get("size_m2") or 0
         )
 
-        ON CONFLICT(source_id)
-        DO UPDATE SET
+        property_type = str(
+            item.get(
+                "property_type"
+            ) or ""
+        )
 
-            city=
-                excluded.city,
+        city = str(
+            item.get("city") or ""
+        )
 
-            street=
-                excluded.street,
 
-            price=
-                excluded.price,
+        changed = False
 
-            size_m2=
-                excluded.size_m2,
 
-            plot_m2=
-                excluded.plot_m2,
+        if existing is None:
 
-            energy_label=
-                excluded.energy_label,
+            changed = True
 
-            property_type=
-                excluded.property_type,
+        else:
 
-            build_year=
-                excluded.build_year,
+            old_price = float(
+                existing["price"] or 0
+            )
 
-            renovation_estimate=
-                excluded.renovation_estimate,
+            old_size = float(
+                existing["size_m2"] or 0
+            )
 
-            source_url=
-                excluded.source_url,
+            old_type = str(
+                existing[
+                    "property_type"
+                ] or ""
+            )
 
-            postal_code=
-                excluded.postal_code,
+            old_city = str(
+                existing["city"] or ""
+            )
 
-            publish_date=
-                excluded.publish_date,
 
-            image_url=
-                excluded.image_url
-        """, values)
+            if (
+                old_price != price
+                or
+                old_size != size_m2
+                or
+                old_type != property_type
+                or
+                old_city != city
+            ):
+                changed = True
+
+
+        if existing is None:
+
+            c.execute(
+                """
+                INSERT INTO properties(
+                    source_id,
+                    city,
+                    street,
+                    price,
+                    size_m2,
+                    plot_m2,
+                    energy_label,
+                    property_type,
+                    build_year,
+                    renovation_estimate,
+                    resale_estimate,
+                    source_url,
+                    postal_code,
+                    publish_date,
+                    image_url,
+                    comparable_count,
+                    median_price_per_m2,
+                    valuation_basis,
+                    analysis_status
+                )
+                VALUES(
+                    ?,?,?,?,?,?,?,?,?,?,
+                    ?,?,?,?,?,0,0,
+                    'voorlopige fallback schatting',
+                    'pending'
+                )
+                """,
+                (
+
+                    source_id,
+
+                    city,
+
+                    item.get(
+                        "street",
+                        ""
+                    ),
+
+                    price,
+
+                    size_m2,
+
+                    item.get(
+                        "plot_m2",
+                        0
+                    ),
+
+                    item.get(
+                        "energy_label",
+                        ""
+                    ),
+
+                    property_type,
+
+                    item.get(
+                        "build_year"
+                    ),
+
+                    renovation,
+
+                    fallback,
+
+                    item.get(
+                        "source_url",
+                        ""
+                    ),
+
+                    item.get(
+                        "postal_code",
+                        ""
+                    ),
+
+                    item.get(
+                        "publish_date",
+                        ""
+                    ),
+
+                    item.get(
+                        "image_url",
+                        ""
+                    ),
+                )
+            )
+
+
+        else:
+
+            c.execute(
+                """
+                UPDATE properties
+                SET
+                    city = ?,
+                    street = ?,
+                    price = ?,
+                    size_m2 = ?,
+                    plot_m2 = ?,
+                    energy_label = ?,
+                    property_type = ?,
+                    build_year = ?,
+                    renovation_estimate = ?,
+                    source_url = ?,
+                    postal_code = ?,
+                    publish_date = ?,
+                    image_url = ?
+                WHERE source_id = ?
+                """,
+                (
+
+                    city,
+
+                    item.get(
+                        "street",
+                        ""
+                    ),
+
+                    price,
+
+                    size_m2,
+
+                    item.get(
+                        "plot_m2",
+                        0
+                    ),
+
+                    item.get(
+                        "energy_label",
+                        ""
+                    ),
+
+                    property_type,
+
+                    item.get(
+                        "build_year"
+                    ),
+
+                    renovation,
+
+                    item.get(
+                        "source_url",
+                        ""
+                    ),
+
+                    item.get(
+                        "postal_code",
+                        ""
+                    ),
+
+                    item.get(
+                        "publish_date",
+                        ""
+                    ),
+
+                    item.get(
+                        "image_url",
+                        ""
+                    ),
+
+                    source_id,
+                )
+            )
+
+
+            if changed:
+
+                c.execute(
+                    """
+                    UPDATE properties
+                    SET
+                        resale_estimate = ?,
+                        comparable_count = 0,
+                        median_price_per_m2 = 0,
+                        valuation_basis =
+                            'voorlopige fallback schatting',
+                        analysis_status =
+                            'pending'
+                    WHERE source_id = ?
+                    """,
+                    (
+                        fallback,
+                        source_id
+                    )
+                )
+
+
+        if changed:
+            new_or_changed += 1
+
 
         imported += 1
+
 
     c.commit()
     c.close()
 
-    return imported
+
+    return {
+        "imported": imported,
+        "new_or_changed":
+            new_or_changed
+    }
 
 
-# --------------------------------------------------
+# ==================================================
+# PENDING WONINGEN
+# ==================================================
+
+def get_pending_properties():
+
+    c = conn()
+
+    rows = [
+
+        dict(row)
+
+        for row in c.execute(
+            """
+            SELECT *
+            FROM properties
+            WHERE
+                analysis_status = 'pending'
+                OR analysis_status IS NULL
+            ORDER BY
+                publish_date DESC,
+                created_at DESC
+            """
+        ).fetchall()
+    ]
+
+    c.close()
+
+    return rows
+
+
+# ==================================================
+# COMPARABLE CACHE
+# ==================================================
+
+def make_cache_key(
+    city,
+    property_type,
+    size_m2
+):
+
+    try:
+        size = float(
+            size_m2 or 0
+        )
+
+    except (
+        TypeError,
+        ValueError
+    ):
+        size = 0
+
+
+    size_band = (
+
+        round(
+            size / 20
+        )
+        * 20
+
+        if size > 0
+
+        else 0
+    )
+
+
+    return (
+        f"{city.strip().lower()}"
+        f"|{property_type.strip().lower()}"
+        f"|{size_band}"
+    )
+
+
+def get_cached_comparison(
+    cache_key
+):
+
+    c = conn()
+
+    row = c.execute(
+        """
+        SELECT result_json
+        FROM comparable_cache
+        WHERE
+            cache_key = ?
+            AND datetime(fetched_at)
+                >= datetime(
+                    'now',
+                    '-12 hours'
+                )
+        """,
+        (
+            cache_key,
+        )
+    ).fetchone()
+
+    c.close()
+
+
+    if not row:
+        return None
+
+
+    try:
+
+        return json.loads(
+            row["result_json"]
+        )
+
+    except Exception:
+
+        return None
+
+
+def save_cached_comparison(
+    cache_key,
+    comparison
+):
+
+    c = conn()
+
+    c.execute(
+        """
+        INSERT INTO comparable_cache(
+            cache_key,
+            result_json,
+            fetched_at
+        )
+        VALUES(
+            ?,?,
+            CURRENT_TIMESTAMP
+        )
+
+        ON CONFLICT(cache_key)
+        DO UPDATE SET
+            result_json =
+                excluded.result_json,
+            fetched_at =
+                CURRENT_TIMESTAMP
+        """,
+        (
+            cache_key,
+            json.dumps(
+                comparison
+            )
+        )
+    )
+
+    c.commit()
+    c.close()
+
+
+# ==================================================
 # VERGELIJKINGSANALYSE
-# --------------------------------------------------
+# ==================================================
+
+def update_analysis_result(
+    source_id,
+    resale,
+    count,
+    median_m2,
+    basis
+):
+
+    c = conn()
+
+    c.execute(
+        """
+        UPDATE properties
+        SET
+            resale_estimate = ?,
+            comparable_count = ?,
+            median_price_per_m2 = ?,
+            valuation_basis = ?,
+            analysis_status = 'done'
+        WHERE source_id = ?
+        """,
+        (
+            resale,
+            count,
+            median_m2,
+            basis,
+            source_id
+        )
+    )
+
+    c.commit()
+    c.close()
+
+
+def mark_analysis_done_with_fallback(
+    item,
+    reason="voorlopige fallback schatting"
+):
+
+    source_id = str(
+        item.get(
+            "source_id"
+        ) or ""
+    ).strip()
+
+
+    renovation = (
+        estimate_renovation(item)
+    )
+
+
+    resale = (
+        fallback_resale(
+            item,
+            renovation
+        )
+    )
+
+
+    update_analysis_result(
+        source_id=source_id,
+        resale=resale,
+        count=0,
+        median_m2=0,
+        basis=reason
+    )
+
 
 def run_comparable_analysis(
     listings,
@@ -591,9 +1042,11 @@ def run_comparable_analysis(
 
     global analysis_running
 
+
     try:
 
-        cache = {}
+        memory_cache = {}
+
 
         for item in listings:
 
@@ -603,8 +1056,10 @@ def run_comparable_analysis(
                 ) or ""
             ).strip()
 
+
             if not source_id:
                 continue
+
 
             city = str(
                 item.get(
@@ -612,94 +1067,122 @@ def run_comparable_analysis(
                 ) or ""
             ).strip()
 
+
             property_type = str(
                 item.get(
                     "property_type"
                 ) or ""
             ).strip()
 
-            size_m2 = float(
-                item.get(
-                    "size_m2"
-                ) or 0
-            )
 
-            if not city:
+            try:
 
-                mark_analysis_failed(
-                    source_id
+                size_m2 = float(
+                    item.get(
+                        "size_m2"
+                    ) or 0
+                )
+
+            except (
+                TypeError,
+                ValueError
+            ):
+
+                size_m2 = 0
+
+
+            if (
+                not city
+                or
+                size_m2 <= 0
+            ):
+
+                mark_analysis_done_with_fallback(
+                    item,
+                    "onvoldoende woninggegevens"
                 )
 
                 continue
 
-            size_band = (
-                round(
-                    size_m2 / 20
-                ) * 20
-                if size_m2 > 0
-                else 0
+
+            cache_key = (
+                make_cache_key(
+                    city,
+                    property_type,
+                    size_m2
+                )
             )
 
-            key = (
-                city.lower(),
-                property_type.lower(),
-                size_band
-            )
 
             comparison = (
-                cache.get(key)
+                memory_cache.get(
+                    cache_key
+                )
             )
+
+
+            if comparison is None:
+
+                comparison = (
+                    get_cached_comparison(
+                        cache_key
+                    )
+                )
+
 
             if comparison is None:
 
                 try:
 
+                    # Maximaal 2 pagina's:
+                    # maximaal circa 30 actuele
+                    # vraagprijswoningen per
+                    # unieke vergelijkingsgroep.
                     comparison = (
                         fetch_comparables(
                             api_key=
                                 api_key,
-
                             city=
                                 city,
-
                             target_size_m2=
                                 size_m2,
-
                             property_type=
                                 property_type,
-
                             exclude_source_id=
                                 source_id,
-
-                            max_pages=1
+                            max_pages=2
                         )
                     )
+
+
+                    save_cached_comparison(
+                        cache_key,
+                        comparison
+                    )
+
 
                 except Exception as e:
 
                     print(
                         "Comparable fout:",
                         city,
-                        repr(e)
+                        repr(e),
+                        flush=True
                     )
 
-                    comparison = {
-                        "count": 0,
-                        "median_price_per_m2": 0,
-                        "estimated_resale": 0,
-                        "basis":
-                            "fallback schatting"
-                    }
 
-                cache[key] = (
-                    comparison
-                )
+                    mark_analysis_done_with_fallback(
+                        item,
+                        "vergelijking tijdelijk niet beschikbaar"
+                    )
 
-            renovation = (
-                estimate_renovation(
-                    item
-                )
-            )
+                    continue
+
+
+            memory_cache[
+                cache_key
+            ] = comparison
+
 
             count = int(
                 comparison.get(
@@ -707,30 +1190,61 @@ def run_comparable_analysis(
                 ) or 0
             )
 
-            median_m2 = float(
-                comparison.get(
-                    "median_price_per_m2"
-                ) or 0
+
+            try:
+
+                median_m2 = float(
+                    comparison.get(
+                        "median_price_per_m2"
+                    ) or 0
+                )
+
+            except (
+                TypeError,
+                ValueError
+            ):
+
+                median_m2 = 0
+
+
+            try:
+
+                comp_resale = float(
+                    comparison.get(
+                        "estimated_resale"
+                    ) or 0
+                )
+
+            except (
+                TypeError,
+                ValueError
+            ):
+
+                comp_resale = 0
+
+
+            renovation = (
+                estimate_renovation(item)
             )
 
-            comp_resale = float(
-                comparison.get(
-                    "estimated_resale"
-                ) or 0
-            )
 
             if (
                 count >= 3
                 and
+                median_m2 > 0
+                and
                 comp_resale > 0
             ):
 
-                resale = comp_resale
+                resale = (
+                    comp_resale
+                )
 
                 basis = (
                     "vergelijkbare actuele "
                     "vraagprijzen"
                 )
+
 
             else:
 
@@ -742,31 +1256,33 @@ def run_comparable_analysis(
                 )
 
                 basis = (
-                    "voorlopige "
-                    "fallback schatting"
+                    "te weinig vergelijkbare "
+                    "actuele vraagprijzen"
                 )
 
-            c = conn()
 
-            c.execute("""
-                UPDATE properties
-                SET
-                    resale_estimate = ?,
-                    comparable_count = ?,
-                    median_price_per_m2 = ?,
-                    valuation_basis = ?,
-                    analysis_status = 'done'
-                WHERE source_id = ?
-            """, (
-                resale,
-                count,
-                median_m2,
-                basis,
-                source_id
-            ))
+            update_analysis_result(
+                source_id=
+                    source_id,
+                resale=
+                    resale,
+                count=
+                    count,
+                median_m2=
+                    median_m2,
+                basis=
+                    basis
+            )
 
-            c.commit()
-            c.close()
+
+    except Exception as e:
+
+        print(
+            "Analyse algemene fout:",
+            repr(e),
+            flush=True
+        )
+
 
     finally:
 
@@ -774,23 +1290,9 @@ def run_comparable_analysis(
             analysis_running = False
 
 
-def mark_analysis_failed(
-    source_id
-):
-
-    c = conn()
-
-    c.execute("""
-        UPDATE properties
-        SET analysis_status = 'done'
-        WHERE source_id = ?
-    """, (
-        source_id,
-    ))
-
-    c.commit()
-    c.close()
-
+# ==================================================
+# ANALYSE STARTEN
+# ==================================================
 
 def start_analysis(
     listings,
@@ -799,12 +1301,18 @@ def start_analysis(
 
     global analysis_running
 
+
+    if not listings:
+        return False
+
+
     with analysis_lock:
 
         if analysis_running:
             return False
 
         analysis_running = True
+
 
     thread = threading.Thread(
         target=
@@ -821,30 +1329,32 @@ def start_analysis(
     return True
 
 
-# --------------------------------------------------
-# DEMO VERWIJDEREN
-# --------------------------------------------------
+# ==================================================
+# DEMO DATA VERWIJDEREN
+# ==================================================
 
 def remove_demo_properties():
 
     c = conn()
 
-    c.execute("""
+    c.execute(
+        """
         DELETE FROM properties
         WHERE
             source_id LIKE 'ff-%'
         OR
             source_url LIKE
             'https://example.com/%'
-    """)
+        """
+    )
 
     c.commit()
     c.close()
 
 
-# --------------------------------------------------
+# ==================================================
 # WEBSITE
-# --------------------------------------------------
+# ==================================================
 
 @app.get("/")
 def home():
@@ -855,9 +1365,9 @@ def home():
     )
 
 
-# --------------------------------------------------
+# ==================================================
 # WONINGEN
-# --------------------------------------------------
+# ==================================================
 
 @app.get("/api/properties")
 def properties():
@@ -867,10 +1377,12 @@ def properties():
         ""
     ).strip()
 
+
     max_price = request.args.get(
         "max_price",
         ""
     ).strip()
+
 
     sql = """
         SELECT *
@@ -879,6 +1391,7 @@ def properties():
     """
 
     params = []
+
 
     if city:
 
@@ -890,6 +1403,7 @@ def properties():
         params.append(
             f"%{city}%"
         )
+
 
     if max_price:
 
@@ -908,42 +1422,47 @@ def properties():
         except ValueError:
             pass
 
+
     sql += """
         ORDER BY
             publish_date DESC,
             created_at DESC
     """
 
+
     c = conn()
 
     rows = [
+
         dict(r)
+
         for r in c.execute(
             sql,
             params
-        )
+        ).fetchall()
     ]
 
     c.close()
 
+
     result = []
+
 
     for row in rows:
 
         row["analysis"] = (
-            calculate_flip(
-                row
-            )
+            calculate_flip(row)
         )
 
         result.append(row)
 
+
     return jsonify(result)
 
 
-# --------------------------------------------------
+# ==================================================
 # IMPORT
-# --------------------------------------------------
+# ==================================================
 
 @app.post("/api/import")
 def do_import():
@@ -951,6 +1470,7 @@ def do_import():
     api_key = os.getenv(
         "REEFAPI_KEY"
     )
+
 
     if not api_key:
 
@@ -960,10 +1480,9 @@ def do_import():
                 "REEFAPI_KEY ontbreekt"
         }), 500
 
+
     try:
 
-        # Slechts 1 ReefAPI-call
-        # voordat gebruiker antwoord krijgt.
         listings = (
             fetch_listings(
                 api_key=
@@ -974,6 +1493,7 @@ def do_import():
             )
         )
 
+
         if not listings:
 
             return jsonify({
@@ -983,30 +1503,65 @@ def do_import():
                     "Geen woningen ontvangen."
             }), 502
 
-        # Eerst ALLE woningen opslaan.
-        imported = (
+
+        save_result = (
             save_basic_listings(
                 listings
             )
         )
 
+
+        imported = (
+            save_result[
+                "imported"
+            ]
+        )
+
+
+        new_or_changed = (
+            save_result[
+                "new_or_changed"
+            ]
+        )
+
+
         if imported > 0:
             remove_demo_properties()
 
-        # Daarna analyse op achtergrond.
+
+        # Belangrijk:
+        # analyseert niet alleen de zojuist
+        # opgehaalde woningen maar OOK oude
+        # woningen die ooit op 'pending'
+        # zijn blijven hangen.
+        pending_listings = (
+            get_pending_properties()
+        )
+
+
         started = (
             start_analysis(
-                listings,
+                pending_listings,
                 api_key
             )
         )
 
+
         return jsonify({
 
-            "ok": True,
+            "ok":
+                True,
 
             "imported":
                 imported,
+
+            "new_or_changed":
+                new_or_changed,
+
+            "pending_analysis":
+                len(
+                    pending_listings
+                ),
 
             "source":
                 "ReefAPI",
@@ -1019,24 +1574,27 @@ def do_import():
                     "gestart"
                     if started
                     else
-                    "loopt al"
+                    "loopt al of niets te analyseren"
                 ),
 
             "message":
                 (
-                    f"{imported} woningen "
-                    "opgehaald. "
-                    "Vergelijkingsanalyse "
-                    "loopt op de achtergrond."
+                    f"{imported} woningen opgehaald. "
+                    f"{len(pending_listings)} woningen "
+                    "staan klaar voor "
+                    "vergelijkingsanalyse."
                 )
         })
+
 
     except Exception as e:
 
         print(
             "Import fout:",
-            repr(e)
+            repr(e),
+            flush=True
         )
+
 
         return jsonify({
             "ok": False,
@@ -1044,9 +1602,63 @@ def do_import():
         }), 500
 
 
-# --------------------------------------------------
+# ==================================================
+# ANALYSE HANDMATIG OPNIEUW STARTEN
+# ==================================================
+
+@app.post("/api/analyse")
+def analyse_pending():
+
+    api_key = os.getenv(
+        "REEFAPI_KEY"
+    )
+
+
+    if not api_key:
+
+        return jsonify({
+            "ok": False,
+            "error":
+                "REEFAPI_KEY ontbreekt"
+        }), 500
+
+
+    pending_listings = (
+        get_pending_properties()
+    )
+
+
+    started = (
+        start_analysis(
+            pending_listings,
+            api_key
+        )
+    )
+
+
+    return jsonify({
+
+        "ok":
+            True,
+
+        "pending":
+            len(
+                pending_listings
+            ),
+
+        "analysis":
+            (
+                "gestart"
+                if started
+                else
+                "loopt al of niets te analyseren"
+            )
+    })
+
+
+# ==================================================
 # ALERTS
-# --------------------------------------------------
+# ==================================================
 
 @app.post("/api/alerts")
 def add_alert():
@@ -1055,47 +1667,56 @@ def add_alert():
         force=True
     )
 
+
     c = conn()
 
-    c.execute("""
+
+    c.execute(
+        """
         INSERT INTO alerts(
             min_profit,
             min_roi,
             max_price,
             city
         )
-        VALUES(?,?,?,?)
-    """, (
-
-        d.get(
-            "min_profit"
-        ),
-
-        d.get(
-            "min_roi"
-        ),
-
-        d.get(
-            "max_price"
-        ),
-
-        d.get(
-            "city",
-            ""
+        VALUES(
+            ?,?,?,?
         )
-    ))
+        """,
+        (
+
+            d.get(
+                "min_profit"
+            ),
+
+            d.get(
+                "min_roi"
+            ),
+
+            d.get(
+                "max_price"
+            ),
+
+            d.get(
+                "city",
+                ""
+            )
+        )
+    )
+
 
     c.commit()
     c.close()
+
 
     return jsonify({
         "ok": True
     })
 
 
-# --------------------------------------------------
+# ==================================================
 # STATUS
-# --------------------------------------------------
+# ==================================================
 
 @app.get("/api/status")
 def status():
@@ -1106,34 +1727,63 @@ def status():
         )
     )
 
+
     c = conn()
+
 
     try:
 
-        count = c.execute("""
+        count = c.execute(
+            """
             SELECT COUNT(*)
             FROM properties
-        """).fetchone()[0]
+            """
+        ).fetchone()[0]
 
-        pending = c.execute("""
+
+        pending = c.execute(
+            """
             SELECT COUNT(*)
             FROM properties
-            WHERE analysis_status = 'pending'
-        """).fetchone()[0]
+            WHERE
+                analysis_status = 'pending'
+                OR analysis_status IS NULL
+            """
+        ).fetchone()[0]
 
-        compared = c.execute("""
+
+        compared = c.execute(
+            """
             SELECT COUNT(*)
             FROM properties
             WHERE comparable_count >= 3
-        """).fetchone()[0]
+            """
+        ).fetchone()[0]
+
+
+        cached = c.execute(
+            """
+            SELECT COUNT(*)
+            FROM comparable_cache
+            WHERE datetime(fetched_at)
+                >= datetime(
+                    'now',
+                    '-12 hours'
+                )
+            """
+        ).fetchone()[0]
+
 
     except Exception:
 
         count = 0
         pending = 0
         compared = 0
+        cached = 0
+
 
     c.close()
+
 
     return jsonify({
 
@@ -1150,7 +1800,8 @@ def status():
             (
                 "configured"
                 if api_key_present
-                else "missing"
+                else
+                "missing"
             ),
 
         "area":
@@ -1163,7 +1814,7 @@ def status():
             "nog niet gekoppeld",
 
         "valuation":
-            "vergelijkbare vraagprijzen",
+            "actuele vergelijkbare vraagprijzen",
 
         "analysis_running":
             analysis_running,
@@ -1173,6 +1824,12 @@ def status():
 
         "properties_with_comparables":
             compared,
+
+        "comparable_cache_groups":
+            cached,
+
+        "comparable_cache_hours":
+            12,
 
         "calculation_model": {
 
@@ -1203,6 +1860,10 @@ def status():
         }
     })
 
+
+# ==================================================
+# START
+# ==================================================
 
 init_db()
 
